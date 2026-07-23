@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marketing Dashboard</title>
+  <style>
+    :root {
+      --navy: #0d1b6e;
+      --deep: #0f172a;
+      --blue: #1a56db;
+      --light-blue: #60a5fa;
+      --sky: #4a90d9;
+      --text: #e5eefc;
+      --muted: #9fb4d6;
+      --card: rgba(15, 23, 42, 0.88);
+      --line: rgba(255,255,255,0.09);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #22c55e;
+      --bg: #08112a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: radial-gradient(circle at top left, #13308a, var(--bg) 48%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .shell { max-width: 1380px; margin: 0 auto; padding: 20px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .brand h1 { margin: 0; font-size: 1.6rem; }
+    .brand p { margin: 4px 0 0; color: var(--muted); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button, input, select, textarea { font: inherit; }
+    button {
+      border: 0; border-radius: 10px; background: linear-gradient(135deg, var(--blue), var(--light-blue));
+      color: #fff; padding: 10px 14px; cursor: pointer; box-shadow: 0 8px 18px rgba(26, 86, 219, 0.24);
+    }
+    button.secondary { background: rgba(255,255,255,0.08); box-shadow: none; border: 1px solid var(--line); }
+    button.danger { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+    .grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+    .stat-card span { display: block; color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
+    .stat-card strong { display: block; font-size: 1.32rem; margin-bottom: 8px; }
+    .target-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+    .progress-shell { background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; height: 12px; margin-top: 10px; }
+    .progress-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4a90d9, #60a5fa); }
+    .subtle { color: var(--muted); font-size: 0.88rem; }
+    .section-title { margin: 0 0 10px; font-size: 1rem; }
+    .due-list, .history-list, .trash-list, .activity-list { display: grid; gap: 10px; }
+    .due-item, .trash-item, .activity-item, .history-item { background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .flag-overdue { border-left: 4px solid var(--danger); }
+    .flag-soon { border-left: 4px solid var(--warning); }
+    .layout { display: grid; grid-template-columns: 1.35fr 0.95fr; gap: 14px; margin-bottom: 18px; }
+    .toolbar { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+    .toolbar input, .toolbar select { width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 16px; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
+    th { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; }
+    .status-badge { display: inline-block; border-radius: 999px; padding: 4px 8px; font-size: 0.8rem; background: rgba(74,144,217,0.18); color:#cfe5ff; }
+    .status-contacted { background: rgba(59,130,246,0.24); }
+    .status-quoted { background: rgba(96,165,250,0.24); }
+    .status-follow-up-due { background: rgba(245,158,11,0.24); }
+    .status-won { background: rgba(34,197,94,0.24); }
+    .status-lost { background: rgba(239,68,68,0.24); }
+    .pill { padding: 6px 9px; border-radius: 999px; font-size: 0.76rem; background: rgba(255,255,255,0.08); }
+    .table-actions a, .table-actions button { font-size: 0.78rem; margin-right: 6px; margin-top: 4px; display: inline-flex; align-items: center; justify-content: center; }
+    .table-actions a { text-decoration: none; background: rgba(255,255,255,0.09); border: 1px solid var(--line); color: #dbe9ff; }
+    .small { font-size: 0.82rem; color: var(--muted); }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(1,9,27,0.78); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 30; }
+    .modal-backdrop.open { display: flex; }
+    .modal { width: min(780px, 100%); background: #0b1431; border-radius: 18px; border: 1px solid var(--line); padding: 18px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-grid input, .form-grid select, .form-grid textarea { width: 100%; background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; }
+    .form-grid textarea { min-height: 92px; resize: vertical; }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .toast { position: fixed; right: 16px; bottom: 16px; padding: 12px 14px; border-radius: 12px; background: #0f172a; border: 1px solid var(--line); color: white; display: none; z-index: 40; max-width: 360px; }
+    .toast.show { display: block; }
+    footer { margin-top: 16px; text-align: center; color: var(--muted); font-size: 0.82rem; }
+    @media (max-width: 980px) { .grid, .layout, .target-row, .toolbar, .form-grid { grid-template-columns: 1fr; } .shell { padding: 12px; } th:nth-child(4), th:nth-child(5), td:nth-child(4), td:nth-child(5) { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand"><h1>Marketing Dashboard</h1><p>Shared sales & follow-up tracker for Dekells sales / marketing.</p></div>
+      <div class="actions">
+        <button id="newEntryBtn">+ New Prospect</button>
+        <button id="refreshBtn" class="secondary">Refresh View</button>
+      </div>
+    </div>
+
+    <section class="grid" id="statsGrid"></section>
+
+    <section class="target-row">
+      <div class="card">
+        <div class="section-title">Monthly Revenue Target</div>
+        <div class="subtle">Shared team target in GH₵ (editable)</div>
+        <input id="revenueTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,0.05); color: white;" />
+        <div class="progress-shell"><div id="revenueProgress" class="progress-bar"></div></div>
+        <div class="subtle" id="revenueProgressLabel"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Monthly Lead Target</div>
+        <div class="subtle">Lead tracker progress vs actual count</div>
+        <input id="leadTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,0.05); color: white;" />
+        <div class="progress-shell"><div id="leadProgress" class="progress-bar"></div></div>
+        <div class="subtle" id="leadProgressLabel"></div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="card"><div class="section-title">Due Today / This Week</div><div id="dueList" class="due-list"></div></div>
+      <div class="card"><div class="section-title">Trash</div><div id="trashList" class="trash-list"></div></div>
+    </section>
+
+    <section class="layout">
+      <div class="card" style="overflow:auto;">
+        <div class="section-title">Shared Pipeline</div>
+        <div class="toolbar">
+          <input id="searchInput" type="text" placeholder="Search by name or company" />
+          <select id="statusFilter">
+            <option value="all">All statuses</option>
+            <option value="contacted">Contacted</option>
+            <option value="quoted">Quoted</option>
+            <option value="follow-up-due">Follow-up due</option>
+            <option value="won">Won</option>
+            <option value="lost">Lost</option>
+          </select>
+          <select id="sortField">
+            <option value="nextFollowUpDate">Sort by next date</option>
+            <option value="company">Sort by company</option>
+            <option value="status">Sort by status</option>
+            <option value="dealValue">Sort by value</option>
+          </select>
+          <button id="clearFiltersBtn" class="secondary">Clear Filters</button>
+        </div>
+        <table>
+          <thead><tr><th>Company</th><th>Contact</th><th>Value</th><th>Status</th><th>Next follow-up</th><th>Actions</th></tr></thead>
+          <tbody id="pipelineTableBody"></tbody>
+        </table>
+      </div>
+      <div class="card"><div class="section-title">Activity Feed</div><div id="activityFeed" class="activity-list"></div></div>
+    </section>
+
+    <section class="layout">
+      <div class="card"><div class="section-title">Month-over-Month History</div><div id="historyList" class="history-list"></div></div>
+      <div class="card"><div class="section-title">Quick Notes</div><div class="subtle">No login is needed. Anyone with the link can update the pipeline instantly. The dashboard is now connected to the existing Grit Manager Supabase project for live shared storage.</div></div>
+    </section>
+
+    <footer>Built by GRiT</footer>
+  </div>
+
+  <div id="entryModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modalTitle">New Prospect / Client</h3>
+        <button id="closeModalBtn" class="secondary">Close</button>
+      </div>
+      <form id="entryForm">
+        <div class="form-grid">
+          <input type="hidden" id="entryId" />
+          <label class="full"><div class="small">Company / Organization</div><input id="company" required /></label>
+          <label><div class="small">Contact Person</div><input id="contactPerson" required /></label>
+          <label><div class="small">Phone</div><input id="phone" /></label>
+          <label><div class="small">Email</div><input id="email" type="email" /></label>
+          <label><div class="small">Deal Value (GH₵)</div><input id="dealValue" type="number" min="0" required /></label>
+          <label><div class="small">Status</div><select id="status"><option value="contacted">Contacted</option><option value="quoted">Quoted</option><option value="follow-up-due">Follow-up due</option><option value="won">Won</option><option value="lost">Lost</option></select></label>
+          <label><div class="small">Last Contact Date</div><input id="lastContactDate" type="date" /></label>
+          <label><div class="small">Next Follow-up Date</div><input id="nextFollowUpDate" type="date" /></label>
+          <label><div class="small">Logged By (optional)</div><input id="loggedBy" /></label>
+          <label class="full"><div class="small">Notes</div><textarea id="notes"></textarea></label>
+        </div>
+        <div class="actions" style="margin-top:14px; justify-content:flex-end;">
+          <button type="submit">Save Entry</button>
+          <button type="button" id="deleteEntryBtn" class="danger">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    window.MARKETING_DASHBOARD_CONFIG = {
+      supabaseUrl: 'https://ppwcqsgxsvcmwpithdna.supabase.co',
+      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwd2Nxc2d4c3ZjbXdwaXRoZG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTI2NDIsImV4cCI6MjA5ODY2ODY0Mn0.hLCoHwDmZMXaRysR6Pd8vZ9-giUpK6tKCy6NWUmKi6E'
+    };
+
+    const STORAGE_KEY = 'marketing-dashboard-state-v1';
+    const DEFAULT_STATE = {
+      revenueTarget: 120000,
+      leadTarget: 25,
+      entries: [
+        { id: 'demo-1', company: 'Golden Star Hotels', contactPerson: 'Kofi Tsikata', phone: '+233 20 123 4567', email: 'kofi@example.com', dealValue: 4200, status: 'won', notes: 'Renewal call in progress.', lastContactDate: new Date().toISOString().slice(0,10), nextFollowUpDate: new Date(Date.now()+86400000*2).toISOString().slice(0,10), loggedBy: 'Mimi', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'demo-2', company: 'Dekells Materials', contactPerson: 'Ama Mensah', phone: '+233 24 654 3210', email: 'ama@example.com', dealValue: 2800, status: 'follow-up-due', notes: 'Needs quote follow-up this week.', lastContactDate: new Date(Date.now()-86400000*3).toISOString().slice(0,10), nextFollowUpDate: new Date(Date.now()+86400000).toISOString().slice(0,10), loggedBy: 'Sylvester', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      ],
+      activity: [
+        { id: crypto.randomUUID(), text: 'Mimi marked Golden Star as Won — GH₵4,200', createdAt: new Date().toISOString() },
+        { id: crypto.randomUUID(), text: 'Sylvester moved Dekells Materials to Follow-up due', createdAt: new Date().toISOString() }
+      ],
+      trash: [],
+      history: []
+    };
+
+    let state = structuredClone(DEFAULT_STATE);
+    let filterText = '';
+    let filterStatus = 'all';
+    let sortField = 'nextFollowUpDate';
+    let supabaseClient = null;
+    let usingSupabase = false;
+
+    function loadState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return structuredClone(DEFAULT_STATE);
+      try { const parsed = JSON.parse(saved); return { ...structuredClone(DEFAULT_STATE), ...parsed }; } catch { return structuredClone(DEFAULT_STATE); }
+    }
+
+    async function initStorage() {
+      state = loadState();
+      const configuredUrl = window.MARKETING_DASHBOARD_CONFIG?.supabaseUrl?.trim();
+      const configuredKey = window.MARKETING_DASHBOARD_CONFIG?.supabaseAnonKey?.trim();
+      if (configuredUrl && configuredKey && window.supabase) {
+        try {
+          usingSupabase = true;
+          supabaseClient = window.supabase.createClient(configuredUrl, configuredKey, { auth: { persistSession: false } });
+          const { data, error } = await supabaseClient.from('dashboard_state').select('value').eq('key', 'marketing-dashboard').maybeSingle();
+          if (!error && data?.value) state = { ...structuredClone(DEFAULT_STATE), ...data.value };
+          else if (error) { console.warn('Supabase sync unavailable. Falling back to local storage.', error); usingSupabase = false; }
+          if (usingSupabase) await persistToSupabase();
+        } catch (err) { console.warn('Supabase unavailable. Falling back to local storage.', err); usingSupabase = false; }
+      }
+      archiveMonthIfNeeded();
+      render();
+    }
+
+    async function persistToSupabase() {
+      if (!usingSupabase || !supabaseClient) return;
+      const payload = { key: 'marketing-dashboard', value: state, updated_at: new Date().toISOString() };
+      const { error } = await supabaseClient.from('dashboard_state').upsert(payload, { onConflict: 'key' });
+      if (error) { console.warn('Unable to sync to Supabase.', error); usingSupabase = false; }
+    }
+
+    async function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      archiveMonthIfNeeded();
+      if (usingSupabase) await persistToSupabase();
+      render();
+    }
+
+    function archiveMonthIfNeeded() {
+      const monthKey = getMonthKey(new Date());
+      const lastArchive = state.history[state.history.length - 1];
+      if (lastArchive && lastArchive.monthKey === monthKey) return;
+      const revenueActual = sumWonRevenueForMonth(monthKey);
+      const leadActual = countEntriesByMonth(monthKey);
+      state.history.push({ monthKey, monthLabel: formatMonthLabel(monthKey), revenueTarget: state.revenueTarget, revenueActual, leadTarget: state.leadTarget, leadActual, archivedAt: new Date().toISOString() });
+      state.history = state.history.slice(-6);
+      state.activity.unshift({ id: crypto.randomUUID(), text: `Auto-archived ${formatMonthLabel(monthKey)} target history`, createdAt: new Date().toISOString() });
+      state.activity = state.activity.slice(0, 50);
+    }
+
+    function getMonthKey(date) { return date.toISOString().slice(0, 7); }
+    function formatMonthLabel(monthKey) { const [year,month] = monthKey.split('-').map(Number); return new Date(year, month-1, 1).toLocaleString('en', { month: 'long', year: 'numeric' }); }
+    function sumWonRevenueForMonth(monthKey) { return state.entries.filter(entry => entry.status === 'won').filter(entry => getMonthKey(new Date(entry.updatedAt || entry.createdAt)) === monthKey).reduce((sum,item)=>sum + Number(item.dealValue||0),0); }
+    function countEntriesByMonth(monthKey) { return state.entries.filter(entry => getMonthKey(new Date(entry.createdAt)) === monthKey).length; }
+    function getDueItems() {
+      const today = new Date(); const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate()); const weekEnd = new Date(todayOnly); weekEnd.setDate(weekEnd.getDate() + 7);
+      return state.entries.filter(entry => entry.nextFollowUpDate || entry.lastContactDate).map(entry => {
+        const next = entry.nextFollowUpDate ? new Date(`${entry.nextFollowUpDate}T00:00:00`) : null;
+        const overdue = next && next < todayOnly;
+        const soon = next && next >= todayOnly && next <= weekEnd;
+        return { ...entry, overdue, soon };
+      }).filter(entry => entry.overdue || entry.soon).sort((a,b)=>(a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || ''));
+    }
+    function formatMoney(n) { return new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 0 }).format(Number(n || 0)); }
+    function renderStats() {
+      const statsGrid = document.getElementById('statsGrid');
+      const currentMonth = getMonthKey(new Date());
+      const wonCount = state.entries.filter(item => item.status === 'won' && getMonthKey(new Date(item.updatedAt || item.createdAt)) === currentMonth).length;
+      const wonValue = sumWonRevenueForMonth(currentMonth);
+      const totalEntries = state.entries.length;
+      const winRate = totalEntries ? Math.round((state.entries.filter(item => item.status === 'won').length / totalEntries) * 100) : 0;
+      const overdueItems = getDueItems().filter(item => item.overdue).length;
+      const stats = [
+        { label: 'Won this month', value: `${wonCount} deals`, extra: formatMoney(wonValue) },
+        { label: 'Win rate', value: `${winRate}%`, extra: 'shared pipeline' },
+        { label: 'Overdue items', value: `${overdueItems}`, extra: 'needs attention now' },
+        { label: 'Lead target', value: `${state.leadTarget}`, extra: 'entries / month' },
+        { label: 'Revenue target', value: formatMoney(state.revenueTarget), extra: 'monthly team goal' },
+        { label: 'Open deals', value: `${state.entries.filter(item => item.status !== 'lost' && item.status !== 'won').length}`, extra: 'working pipeline' }
+      ];
+      statsGrid.innerHTML = stats.map(stat => `<div class="card stat-card"><span>${stat.label}</span><strong>${stat.value}</strong><div class="subtle">${stat.extra}</div></div>`).join('');
+    }
+    function renderProgress() {
+      const revenueActual = sumWonRevenueForMonth(getMonthKey(new Date()));
+      const revenuePercent = Math.min(100, Math.round((revenueActual / Math.max(1, Number(state.revenueTarget))) * 100));
+      document.getElementById('revenueProgress').style.width = `${revenuePercent}%`;
+      document.getElementById('revenueProgressLabel').textContent = `${formatMoney(revenueActual)} of ${formatMoney(state.revenueTarget)} reached (${revenuePercent}%)`;
+      const leadActual = countEntriesByMonth(getMonthKey(new Date()));
+      const leadPercent = Math.min(100, Math.round((leadActual / Math.max(1, Number(state.leadTarget))) * 100));
+      document.getElementById('leadProgress').style.width = `${leadPercent}%`;
+      document.getElementById('leadProgressLabel').textContent = `${leadActual} leads logged versus ${state.leadTarget} target (${leadPercent}%)`;
+    }
+    function renderDueList() {
+      const dueList = document.getElementById('dueList'); const dueItems = getDueItems();
+      if (!dueItems.length) { dueList.innerHTML = '<div class="due-item">No follow-up or renewal items are due right now.</div>'; return; }
+      dueList.innerHTML = dueItems.map(item => `<div class="due-item ${item.overdue ? 'flag-overdue' : 'flag-soon'}"><strong>${item.company}</strong><br /><span class="small">${item.contactPerson} · ${item.status} · ${item.nextFollowUpDate || item.lastContactDate}</span><br /><span class="small">${item.overdue ? 'Overdue' : 'Due soon'} · ${formatMoney(item.dealValue)}</span></div>`).join('');
+    }
+    function renderTrash() {
+      const trashList = document.getElementById('trashList');
+      if (!state.trash.length) { trashList.innerHTML = '<div class="trash-item">No removed entries in the trash.</div>'; return; }
+      trashList.innerHTML = state.trash.map(item => `<div class="trash-item"><strong>${item.company}</strong><div class="small">Removed ${new Date(item.deletedAt).toLocaleString()}</div><div class="actions" style="margin-top:8px;"><button data-undo-id="${item.id}" class="secondary">Undo</button></div></div>`).join('');
+      trashList.querySelectorAll('[data-undo-id]').forEach(btn => btn.addEventListener('click', () => undoTrash(btn.getAttribute('data-undo-id'))));
+    }
+    function renderActivity() {
+      const container = document.getElementById('activityFeed');
+      container.innerHTML = state.activity.slice(0, 50).map(item => `<div class="activity-item"><div>${item.text}</div><div class="small">${new Date(item.createdAt).toLocaleString()}</div></div>`).join('');
+    }
+    function renderHistory() {
+      const container = document.getElementById('historyList');
+      container.innerHTML = state.history.map(item => `<div class="history-item"><strong>${item.monthLabel}</strong><div class="small">Target: ${formatMoney(item.revenueTarget)} · Actual: ${formatMoney(item.revenueActual)} · Leads: ${item.leadActual}/${item.leadTarget}</div></div>`).join('');
+    }
+    function renderTable() {
+      const tbody = document.getElementById('pipelineTableBody');
+      const search = filterText.toLowerCase();
+      const items = state.entries.filter(item => { if (filterStatus !== 'all' && item.status !== filterStatus) return false; if (!search) return true; return [`${item.company}`, `${item.contactPerson}`, `${item.phone}`, `${item.email}`].some(val => (val || '').toLowerCase().includes(search)); }).sort((a,b) => { if (sortField === 'company') return (a.company || '').localeCompare(b.company || ''); if (sortField === 'status') return (a.status || '').localeCompare(b.status || ''); if (sortField === 'dealValue') return Number(b.dealValue || 0) - Number(a.dealValue || 0); return (a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || ''); });
+      tbody.innerHTML = items.map(item => `<tr><td><strong>${item.company}</strong><br /><span class="small">${item.notes || 'No notes added'}</span></td><td>${item.contactPerson}<br /><span class="small">${item.phone || item.email || 'No phone or email'}</span></td><td>${formatMoney(item.dealValue)}</td><td><span class="status-badge status-${item.status.replace(/\s+/g, '-')}">${item.status}</span></td><td>${item.nextFollowUpDate || '—'}</td><td class="table-actions"><button data-edit-id="${item.id}" class="secondary">Edit</button><button data-delete-id="${item.id}" class="danger">Delete</button><a href="${buildWhatsAppLink(item)}" target="_blank">WhatsApp</a><a href="${buildEmailLink(item)}" target="_blank">Email</a></td></tr>`).join('');
+      tbody.querySelectorAll('[data-edit-id]').forEach(btn => btn.addEventListener('click', () => openModal(btn.getAttribute('data-edit-id'))));
+      tbody.querySelectorAll('[data-delete-id]').forEach(btn => btn.addEventListener('click', () => removeEntry(btn.getAttribute('data-delete-id'))));
+    }
+    function openModal(id = null) {
+      const modal = document.getElementById('entryModal'); const form = document.getElementById('entryForm'); const title = document.getElementById('modalTitle'); const deleteBtn = document.getElementById('deleteEntryBtn'); const entry = state.entries.find(item => item.id === id);
+      form.reset();
+      document.getElementById('entryId').value = entry ? entry.id : '';
+      document.getElementById('company').value = entry?.company || '';
+      document.getElementById('contactPerson').value = entry?.contactPerson || '';
+      document.getElementById('phone').value = entry?.phone || '';
+      document.getElementById('email').value = entry?.email || '';
+      document.getElementById('dealValue').value = entry?.dealValue || 0;
+      document.getElementById('status').value = entry?.status || 'contacted';
+      document.getElementById('lastContactDate').value = entry?.lastContactDate || '';
+      document.getElementById('nextFollowUpDate').value = entry?.nextFollowUpDate || '';
+      document.getElementById('loggedBy').value = entry?.loggedBy || '';
+      document.getElementById('notes').value = entry?.notes || '';
+      title.textContent = entry ? 'Edit Prospect / Client' : 'New Prospect / Client';
+      deleteBtn.style.display = entry ? 'inline-flex' : 'none';
+      modal.classList.add('open');
+    }
+    function closeModal() { document.getElementById('entryModal').classList.remove('open'); }
+    function addOrUpdateEntry(event) {
+      event.preventDefault();
+      const id = document.getElementById('entryId').value;
+      const payload = { company: document.getElementById('company').value.trim(), contactPerson: document.getElementById('contactPerson').value.trim(), phone: document.getElementById('phone').value.trim(), email: document.getElementById('email').value.trim(), dealValue: Number(document.getElementById('dealValue').value || 0), status: document.getElementById('status').value, lastContactDate: document.getElementById('lastContactDate').value, nextFollowUpDate: document.getElementById('nextFollowUpDate').value, loggedBy: document.getElementById('loggedBy').value.trim(), notes: document.getElementById('notes').value.trim(), updatedAt: new Date().toISOString() };
+      if (!payload.company || !payload.contactPerson || !payload.dealValue) { showToast('Company, contact person and deal value are required.'); return; }
+      if (id) {
+        const index = state.entries.findIndex(item => item.id === id);
+        const old = state.entries[index];
+        state.entries[index] = { ...old, ...payload };
+        state.activity.unshift({ id: crypto.randomUUID(), text: `${payload.loggedBy || 'Team'} updated ${payload.company} to ${payload.status} — ${formatMoney(payload.dealValue)}`, createdAt: new Date().toISOString() });
+      } else {
+        const newEntry = { id: crypto.randomUUID(), ...payload, createdAt: new Date().toISOString() };
+        state.entries.unshift(newEntry);
+        state.activity.unshift({ id: crypto.randomUUID(), text: `${payload.loggedBy || 'Team'} added ${payload.company} — ${formatMoney(payload.dealValue)}`, createdAt: new Date().toISOString() });
+      }
+      state.activity = state.activity.slice(0, 50);
+      closeModal(); saveState(); showToast('Entry saved successfully.');
+    }
+    function removeEntry(id) {
+      const entry = state.entries.find(item => item.id === id); if (!entry) return;
+      if (!window.confirm(`Move ${entry.company} to Trash? This supports a safe undo and keeps a lightweight audit trail.`)) return;
+      state.entries = state.entries.filter(item => item.id !== id);
+      state.trash.unshift({ ...entry, deletedAt: new Date().toISOString() });
+      state.trash = state.trash.slice(0, 5);
+      state.activity.unshift({ id: crypto.randomUUID(), text: `${entry.loggedBy || 'Team'} deleted ${entry.company} from the pipeline`, createdAt: new Date().toISOString() });
+      saveState(); showToast('Entry moved to trash. You can undo it from the Trash panel.');
+    }
+    function undoTrash(id) {
+      const trashEntry = state.trash.find(item => item.id === id); if (!trashEntry) return;
+      state.trash = state.trash.filter(item => item.id !== id);
+      state.entries.unshift(trashEntry);
+      state.activity.unshift({ id: crypto.randomUUID(), text: `${trashEntry.loggedBy || 'Team'} restored ${trashEntry.company} from Trash`, createdAt: new Date().toISOString() });
+      saveState(); showToast('Entry restored from trash.');
+    }
+    function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2400); }
+    function buildWhatsAppLink(item) { const text = encodeURIComponent(`Hi ${item.contactPerson},\n\nJust checking in on ${item.company}. Please review our latest follow-up and next steps.\n\nBest,\n${item.loggedBy || 'Team'}`); return `https://wa.me/${(item.phone || '').replace(/\D/g, '')}?text=${text}`; }
+    function buildEmailLink(item) { const subject = encodeURIComponent(`Follow-up for ${item.company}`); const body = encodeURIComponent(`Hi ${item.contactPerson},\n\nI wanted to follow up on ${item.company}.\n\nBest regards,\n${item.loggedBy || 'Team'}`); return `mailto:${item.email || ''}?subject=${subject}&body=${body}`; }
+
+    document.getElementById('newEntryBtn').addEventListener('click', () => openModal());
+    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+    document.getElementById('entryForm').addEventListener('submit', addOrUpdateEntry);
+    document.getElementById('deleteEntryBtn').addEventListener('click', () => { const id = document.getElementById('entryId').value; if (id) removeEntry(id); closeModal(); });
+    document.getElementById('refreshBtn').addEventListener('click', () => { archiveMonthIfNeeded(); render(); showToast('Dashboard refreshed.'); });
+    document.getElementById('revenueTargetInput').addEventListener('change', e => { state.revenueTarget = Number(e.target.value || 0); saveState(); });
+    document.getElementById('leadTargetInput').addEventListener('change', e => { state.leadTarget = Number(e.target.value || 0); saveState(); });
+    document.getElementById('searchInput').addEventListener('input', e => { filterText = e.target.value; renderTable(); });
+    document.getElementById('statusFilter').addEventListener('change', e => { filterStatus = e.target.value; renderTable(); });
+    document.getElementById('sortField').addEventListener('change', e => { sortField = e.target.value; renderTable(); });
+    document.getElementById('clearFiltersBtn').addEventListener('click', () => { filterText=''; filterStatus='all'; sortField='nextFollowUpDate'; document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = 'all'; document.getElementById('sortField').value = 'nextFollowUpDate'; renderTable(); });
+
+    function render() { document.getElementById('revenueTargetInput').value = state.revenueTarget; document.getElementById('leadTargetInput').value = state.leadTarget; renderStats(); renderProgress(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); }
+    initStorage();
+  </script>
+</body>
+</html>
+
