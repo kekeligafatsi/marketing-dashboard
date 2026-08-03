@@ -9,6 +9,7 @@ This project has a single file (`index.html`) and a small git history: one commi
 Uncommitted changes currently in the working copy, not yet part of a git commit.
 
 ### Added
+- Dekells round logo (embedded as a base64 `data:` URI, same source image as `dekells-manager-v9.html`'s `ROUND_LOGO_B64`) set as the site favicon.
 - Left sidebar navigation (`.sidebar`, `.side-btn`) matching the `dekells-manager` app's nav pattern, splitting the dashboard into three pages (Dashboard / Pipeline / History) instead of one long scrolling column.
 - Trash moved from an always-visible inline card to an icon-triggered slide-over panel (`#trashBtn` → `#trashPanel`), with a red badge dot shown only when the trash is non-empty. Closes via the Close button, backdrop click, or Escape.
 - Activity Feed moved from an always-visible inline card to an icon-triggered dropdown panel (`#activityBtn` → `#activityDropdown`), with the same badge-dot treatment. Closes via outside click or Escape. Both the trash and activity buttons expose `aria-haspopup`/`aria-expanded` for screen readers.
