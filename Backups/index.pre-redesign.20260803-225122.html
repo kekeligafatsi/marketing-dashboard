@@ -5,284 +5,161 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Marketing Dashboard</title>
   <style>
-    /* Color tokens match dekells-manager's exact palette for brand consistency. */
     :root {
-      --orange: #ff5e1f;
-      --orange-light: #fff3ee;
-      --orange-btn-text: #c2410c;
-      --black: #111111;
-      --grey-dark: #333;
-      --grey: #666;
-      --grey-light: #999;
-      --border: #e5e5e5;
-      --bg: #f7f7f7;
-      --white: #ffffff;
-      --green: #1a9e5c;
-      --green-light: #e8f7f0;
-      --red: #d93025;
-      --red-light: #fdecea;
-      --yellow: #e6a817;
-      --yellow-light: #fef8e7;
-      --blue: #1a6eb5;
-      --blue-light: #e8f0fb;
-      --navy: #00094B;
-      --navy-light: #232a5c;
-      --radius: 8px;
-      --shadow: 0 2px 8px rgba(0,0,0,0.08);
-      --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
+      --navy: #0d1b6e;
+      --deep: #0f172a;
+      --blue: #1a56db;
+      --light-blue: #60a5fa;
+      --sky: #4a90d9;
+      --text: #e5eefc;
+      --muted: #9fb4d6;
+      --card: rgba(15, 23, 42, 0.88);
+      --line: rgba(255,255,255,0.09);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #22c55e;
+      --bg: #08112a;
     }
 
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
-      background: var(--bg);
-      color: var(--black);
+      background: radial-gradient(circle at top left, #13308a, var(--bg) 48%);
+      color: var(--text);
       min-height: 100vh;
     }
 
-    .app-shell { display: flex; min-height: 100vh; }
-
-    /* ── SIDEBAR ── */
-    .sidebar { width: 230px; flex-shrink: 0; background: var(--navy); display: flex; flex-direction: column; padding: 18px 0; }
-    .sidebar-brand { padding: 0 20px 20px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
-    .sidebar-brand h1 { margin: 0; font-size: 1.05rem; }
-    .sidebar-brand p { margin: 6px 0 0; color: rgba(255,255,255,0.6); font-size: 0.76rem; line-height: 1.4; }
-    .side-btn {
-      display: flex; align-items: center; gap: 10px; text-align: left;
-      padding: 11px 20px; margin: 1px 10px; border: none; background: none; cursor: pointer;
-      font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.75);
-      border-radius: var(--radius); width: calc(100% - 20px); transition: all 0.15s;
-    }
-    .side-btn:hover { background: var(--navy-light); color: #fff; }
-    .side-btn.active { background: var(--orange); color: #fff; }
-
-    /* ── MAIN ── */
-    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .topbar {
-      display: flex; justify-content: space-between; align-items: center; gap: 16px;
-      padding: 18px 28px; border-bottom: 1px solid var(--border); background: var(--white);
-      flex-wrap: wrap; position: sticky; top: 0; z-index: 15;
-    }
-    .page-title h2 { margin: 0; font-size: 1.25rem; color: var(--navy); }
-    .page-title p { margin: 4px 0 0; color: var(--grey); font-size: 0.85rem; }
-    .header-actions { display: flex; gap: 10px; align-items: center; position: relative; }
-
+    .shell { max-width: 1380px; margin: 0 auto; padding: 20px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .brand h1 { margin: 0; font-size: 1.6rem; }
+    .brand p { margin: 4px 0 0; color: var(--muted); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
     button, input, select, textarea { font: inherit; }
     button {
-      border: 0; border-radius: var(--radius); background: var(--orange);
-      color: #fff; padding: 9px 14px; cursor: pointer; font-weight: 700; font-size: 13px;
+      border: 0; border-radius: 10px; background: linear-gradient(135deg, var(--blue), var(--light-blue));
+      color: #fff; padding: 10px 14px; cursor: pointer; box-shadow: 0 8px 18px rgba(26, 86, 219, 0.24);
     }
-    button.secondary { background: var(--white); color: var(--black); border: 1px solid var(--border); }
-    button.danger { background: var(--red); }
-    button.icon-btn { background: var(--white); border: 1px solid var(--border); color: var(--navy); padding: 9px 12px; position: relative; font-size: 15px; }
-    button.icon-btn:hover { background: var(--bg); }
-    .badge-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--red); border: 1.5px solid var(--white); }
-
-    .page-content { padding: 24px 28px; flex: 1; }
-    .page { display: none; }
-    .page.active { display: block; }
-
+    button.secondary { background: rgba(255,255,255,0.08); box-shadow: none; border: 1px solid var(--line); }
+    button.danger { background: linear-gradient(135deg, #b91c1c, #ef4444); }
     .grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
-    .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
-    .stat-card span { display: block; color: var(--grey); font-size: 0.82rem; margin-bottom: 8px; }
-    .stat-card strong { display: block; font-size: 1.3rem; margin-bottom: 6px; color: var(--navy); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+    .stat-card span { display: block; color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
+    .stat-card strong { display: block; font-size: 1.32rem; margin-bottom: 8px; }
     .target-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
-    .progress-shell { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; height: 12px; margin-top: 10px; }
-    .progress-bar { height: 100%; border-radius: inherit; background: var(--orange); }
-    .subtle { color: var(--grey); font-size: 0.85rem; }
-    .section-title { margin: 0 0 12px; font-size: 1rem; color: var(--navy); font-weight: 700; }
+    .progress-shell { background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; height: 12px; margin-top: 10px; }
+    .progress-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4a90d9, #60a5fa); }
+    .subtle { color: var(--muted); font-size: 0.88rem; }
+    .section-title { margin: 0 0 10px; font-size: 1rem; }
     .due-list, .history-list, .trash-list, .activity-list { display: grid; gap: 10px; }
-    .due-item, .trash-item, .activity-item, .history-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
-    .flag-overdue { border-left: 4px solid var(--red); }
-    .flag-soon { border-left: 4px solid var(--yellow); }
-
-    .toolbar { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
-    .toolbar input, .toolbar select { width: 100%; padding: 9px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--white); color: var(--black); }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--grey); font-size: 0.78rem; text-transform: uppercase; }
-    .status-badge { display: inline-block; border-radius: 999px; padding: 4px 9px; font-size: 0.78rem; font-weight: 700; }
-    .status-contacted { background: var(--blue-light); color: var(--blue); }
-    .status-quoted { background: var(--yellow-light); color: #8a5c00; }
-    .status-follow-up-due { background: var(--red-light); color: var(--red); }
-    .status-won { background: var(--green-light); color: var(--green); }
-    .status-lost { background: #eee; color: var(--grey); }
-    .table-actions a, .table-actions button { font-size: 0.76rem; margin-right: 5px; margin-top: 4px; padding: 6px 9px; }
-    .table-actions a { text-decoration: none; background: var(--white); border: 1px solid var(--border); color: var(--navy); display: inline-flex; align-items: center; border-radius: var(--radius); }
-    .table-actions button.secondary { color: var(--navy); }
-
-    input::placeholder, textarea::placeholder { color: var(--grey-light); opacity: 1; }
+    .due-item, .trash-item, .activity-item, .history-item { background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .flag-overdue { border-left: 4px solid var(--danger); }
+    .flag-soon { border-left: 4px solid var(--warning); }
+    .layout { display: grid; grid-template-columns: 1.35fr 0.95fr; gap: 14px; margin-bottom: 18px; }
+    .toolbar { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+    .toolbar input, .toolbar select { width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 16px; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
+    th { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; }
+    .status-badge { display: inline-block; border-radius: 999px; padding: 4px 8px; font-size: 0.8rem; background: rgba(74,144,217,0.18); color:#cfe5ff; }
+    .status-contacted { background: rgba(59,130,246,0.24); }
+    .status-quoted { background: rgba(96,165,250,0.24); }
+    .status-follow-up-due { background: rgba(245,158,11,0.24); }
+    .status-won { background: rgba(34,197,94,0.24); }
+    .status-lost { background: rgba(239,68,68,0.24); }
+    .pill { padding: 6px 9px; border-radius: 999px; font-size: 0.76rem; background: rgba(255,255,255,0.08); }
+    .table-actions a, .table-actions button { font-size: 0.78rem; margin-right: 6px; margin-top: 4px; display: inline-flex; align-items: center; justify-content: center; }
+    .table-actions a { text-decoration: none; background: rgba(255,255,255,0.09); border: 1px solid var(--line); color: #dbe9ff; padding: 8px 10px; }
+    input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
-      outline: 2px solid var(--blue); outline-offset: 2px;
+      outline: 2px solid var(--light-blue); outline-offset: 2px;
     }
-    .small { font-size: 0.8rem; color: var(--grey); }
-
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+    .small { font-size: 0.82rem; color: var(--muted); }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(1,9,27,0.78); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 30; }
     .modal-backdrop.open { display: flex; }
-    .modal { width: min(780px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 20px; }
+    .modal { width: min(780px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #0b1431; border-radius: 18px; border: 1px solid var(--line); padding: 18px; }
     .form-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
     .form-grid .full { grid-column: 1 / -1; }
-    .form-grid input, .form-grid select, .form-grid textarea { width: 100%; background: var(--white); color: var(--black); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 11px; }
+    .form-grid input, .form-grid select, .form-grid textarea { width: 100%; background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; }
     .form-grid textarea { min-height: 92px; resize: vertical; }
-    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .modal-head h3 { margin: 0; color: var(--navy); }
-
-    .toast { position: fixed; right: 16px; bottom: 16px; padding: 12px 16px; border-radius: var(--radius); background: var(--navy); border: 1px solid var(--navy-light); color: #fff; display: none; z-index: 60; max-width: 360px; box-shadow: var(--shadow-lg); }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .toast { position: fixed; right: 16px; bottom: 16px; padding: 12px 14px; border-radius: 12px; background: #0f172a; border: 1px solid var(--line); color: white; display: none; z-index: 40; max-width: 360px; }
     .toast.show { display: block; }
-    footer { margin-top: auto; text-align: center; color: var(--grey); font-size: 0.8rem; padding: 20px; }
-
-    /* ── TRASH SLIDE-OVER ── */
-    .slide-over-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; z-index: 55; }
-    .slide-over-backdrop.open { display: block; }
-    .slide-over {
-      position: fixed; top: 0; right: -380px; width: 360px; max-width: 90vw; height: 100vh;
-      background: var(--white); box-shadow: var(--shadow-lg); z-index: 56;
-      transition: right 0.25s ease; display: flex; flex-direction: column;
-    }
-    .slide-over.open { right: 0; }
-    .slide-over-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border); }
-    .slide-over-head h3 { margin: 0; color: var(--navy); font-size: 1rem; }
-    .slide-over-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
-
-    /* ── ACTIVITY DROPDOWN ── */
-    .dropdown-panel {
-      position: absolute; top: calc(100% + 8px); right: 0; width: 320px; max-height: 420px;
-      overflow-y: auto; background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 14px; display: none; z-index: 20;
-    }
-    .dropdown-panel.open { display: block; }
-
-    @media (max-width: 980px) {
-      .app-shell { flex-direction: column; }
-      .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; align-items: center; }
-      .sidebar-brand { display: none; }
-      .side-btn { width: auto; white-space: nowrap; }
-      .grid, .target-row, .toolbar, .form-grid { grid-template-columns: 1fr; }
-      .page-content { padding: 14px; }
-      .topbar { padding: 14px; }
-      th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { display: none; }
-      .dropdown-panel { width: min(320px, 90vw); }
-    }
+    footer { margin-top: 16px; text-align: center; color: var(--muted); font-size: 0.82rem; }
+    @media (max-width: 980px) { .grid, .layout, .target-row, .toolbar, .form-grid { grid-template-columns: 1fr; } .shell { padding: 12px; } th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { display: none; } }
   </style>
 </head>
 <body>
-  <div class="app-shell">
-    <nav class="sidebar">
-      <div class="sidebar-brand">
-        <h1>Marketing Dashboard</h1>
-        <p>Shared sales &amp; follow-up tracker for Dekells sales / marketing.</p>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand"><h1>Marketing Dashboard</h1><p>Shared sales & follow-up tracker for Dekells sales / marketing.</p></div>
+      <div class="actions">
+        <button id="newEntryBtn">+ New Prospect</button>
+        <button id="refreshBtn" class="secondary">Refresh View</button>
       </div>
-      <button class="side-btn active" data-page="dashboard">📊 Dashboard</button>
-      <button class="side-btn" data-page="pipeline">📋 Pipeline</button>
-      <button class="side-btn" data-page="history">📈 History</button>
-    </nav>
+    </div>
 
-    <div class="main">
-      <header class="topbar">
-        <div class="page-title">
-          <h2 id="pageTitle">Dashboard</h2>
-          <p id="pageSubtitle">Targets, follow-ups due, and a snapshot of the pipeline.</p>
-        </div>
-        <div class="header-actions">
-          <button id="newEntryBtn">+ New Prospect</button>
-          <button id="refreshBtn" class="secondary">Refresh View</button>
-          <button id="activityBtn" class="icon-btn" type="button" title="Activity Feed" aria-haspopup="true" aria-expanded="false">
-            🕓<span id="activityDot" class="badge-dot" style="display:none"></span>
-          </button>
-          <div id="activityDropdown" class="dropdown-panel">
-            <div class="section-title" style="margin-bottom:10px">Activity Feed</div>
-            <div id="activityFeed" class="activity-list"></div>
-          </div>
-          <button id="trashBtn" class="icon-btn" type="button" title="Trash" aria-haspopup="true" aria-expanded="false">
-            🗑<span id="trashDot" class="badge-dot" style="display:none"></span>
-          </button>
-        </div>
-      </header>
+    <div id="syncStatus" style="display:none; margin-bottom:14px; padding:10px 14px; border-radius:10px; background:rgba(245,158,11,0.15); border:1px solid var(--warning); color:#fde68a; font-size:0.86rem;"></div>
 
-      <div id="syncStatus" style="display:none; margin:16px 28px 0; padding:10px 14px; border-radius:8px; background:var(--yellow-light); border:1px solid var(--yellow); color:#8a5c00; font-size:0.85rem;"></div>
+    <section class="grid" id="statsGrid"></section>
 
-      <div class="page-content">
-        <div class="page active" id="page-dashboard">
-          <section class="grid" id="statsGrid"></section>
-
-          <section class="target-row">
-            <div class="card">
-              <div class="section-title">Monthly Revenue Target</div>
-              <div class="subtle">Shared team target in GH₵ (editable)</div>
-              <input id="revenueTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--black);" />
-              <div class="progress-shell"><div id="revenueProgress" class="progress-bar"></div></div>
-              <div class="subtle" id="revenueProgressLabel"></div>
-            </div>
-            <div class="card">
-              <div class="section-title">Monthly Lead Target</div>
-              <div class="subtle">Lead tracker progress vs actual count</div>
-              <input id="leadTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--black);" />
-              <div class="progress-shell"><div id="leadProgress" class="progress-bar"></div></div>
-              <div class="subtle" id="leadProgressLabel"></div>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="section-title">Due Today / This Week</div>
-            <div id="dueList" class="due-list"></div>
-          </section>
-        </div>
-
-        <div class="page" id="page-pipeline">
-          <div class="card" style="overflow:auto;">
-            <div class="section-title">Shared Pipeline</div>
-            <div class="toolbar">
-              <input id="searchInput" type="text" placeholder="Search by name or company" />
-              <select id="statusFilter">
-                <option value="all">All statuses</option>
-                <option value="contacted">Contacted</option>
-                <option value="quoted">Quoted</option>
-                <option value="follow-up-due">Follow-up due</option>
-                <option value="won">Won</option>
-                <option value="lost">Lost</option>
-              </select>
-              <select id="sortField">
-                <option value="nextFollowUpDate">Sort by next date</option>
-                <option value="company">Sort by company</option>
-                <option value="status">Sort by status</option>
-                <option value="dealValue">Sort by value</option>
-              </select>
-              <button id="clearFiltersBtn" class="secondary">Clear Filters</button>
-            </div>
-            <table>
-              <thead><tr><th>Company</th><th>Contact</th><th>Value</th><th>Status</th><th>Next follow-up</th><th>Actions</th></tr></thead>
-              <tbody id="pipelineTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="page" id="page-history">
-          <section class="card">
-            <div class="section-title">Month-over-Month History</div>
-            <div id="historyList" class="history-list"></div>
-          </section>
-          <section class="card" style="margin-top:16px">
-            <div class="section-title">Quick Notes</div>
-            <div class="subtle">No login is needed. Anyone with the link can update the pipeline instantly. The dashboard is connected to the shared Supabase project for live shared storage.</div>
-          </section>
-        </div>
+    <section class="target-row">
+      <div class="card">
+        <div class="section-title">Monthly Revenue Target</div>
+        <div class="subtle">Shared team target in GH₵ (editable)</div>
+        <input id="revenueTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,0.05); color: white;" />
+        <div class="progress-shell"><div id="revenueProgress" class="progress-bar"></div></div>
+        <div class="subtle" id="revenueProgressLabel"></div>
       </div>
+      <div class="card">
+        <div class="section-title">Monthly Lead Target</div>
+        <div class="subtle">Lead tracker progress vs actual count</div>
+        <input id="leadTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,0.05); color: white;" />
+        <div class="progress-shell"><div id="leadProgress" class="progress-bar"></div></div>
+        <div class="subtle" id="leadProgressLabel"></div>
+      </div>
+    </section>
 
-      <footer>Built by GRiT</footer>
-    </div>
-  </div>
+    <section class="layout">
+      <div class="card"><div class="section-title">Due Today / This Week</div><div id="dueList" class="due-list"></div></div>
+      <div class="card"><div class="section-title">Trash</div><div id="trashList" class="trash-list"></div></div>
+    </section>
 
-  <!-- Trash slide-over -->
-  <div id="trashBackdrop" class="slide-over-backdrop"></div>
-  <div id="trashPanel" class="slide-over" role="dialog" aria-modal="true" aria-labelledby="trashPanelTitle">
-    <div class="slide-over-head">
-      <h3 id="trashPanelTitle">Trash</h3>
-      <button id="closeTrashBtn" class="secondary" type="button">Close</button>
-    </div>
-    <div class="slide-over-body">
-      <div id="trashList" class="trash-list"></div>
-    </div>
+    <section class="layout">
+      <div class="card" style="overflow:auto; align-self:start;">
+        <div class="section-title">Shared Pipeline</div>
+        <div class="toolbar">
+          <input id="searchInput" type="text" placeholder="Search by name or company" />
+          <select id="statusFilter">
+            <option value="all">All statuses</option>
+            <option value="contacted">Contacted</option>
+            <option value="quoted">Quoted</option>
+            <option value="follow-up-due">Follow-up due</option>
+            <option value="won">Won</option>
+            <option value="lost">Lost</option>
+          </select>
+          <select id="sortField">
+            <option value="nextFollowUpDate">Sort by next date</option>
+            <option value="company">Sort by company</option>
+            <option value="status">Sort by status</option>
+            <option value="dealValue">Sort by value</option>
+          </select>
+          <button id="clearFiltersBtn" class="secondary">Clear Filters</button>
+        </div>
+        <table>
+          <thead><tr><th>Company</th><th>Contact</th><th>Value</th><th>Status</th><th>Next follow-up</th><th>Actions</th></tr></thead>
+          <tbody id="pipelineTableBody"></tbody>
+        </table>
+      </div>
+      <div class="card"><div class="section-title">Activity Feed</div><div id="activityFeed" class="activity-list"></div></div>
+    </section>
+
+    <section class="layout">
+      <div class="card"><div class="section-title">Month-over-Month History</div><div id="historyList" class="history-list"></div></div>
+      <div class="card"><div class="section-title">Quick Notes</div><div class="subtle">No login is needed. Anyone with the link can update the pipeline instantly. The dashboard is now connected to the existing Grit Manager Supabase project for live shared storage.</div></div>
+    </section>
+
+    <footer>Built by GRiT</footer>
   </div>
 
   <div id="entryModal" class="modal-backdrop">
@@ -305,7 +182,7 @@
           <label><div class="small">Logged By (optional)</div><input id="loggedBy" /></label>
           <label class="full"><div class="small">Notes</div><textarea id="notes"></textarea></label>
         </div>
-        <div class="actions" style="margin-top:14px; justify-content:flex-end; display:flex; gap:10px;">
+        <div class="actions" style="margin-top:14px; justify-content:flex-end;">
           <button type="submit">Save Entry</button>
           <button type="button" id="deleteEntryBtn" class="danger">Delete</button>
         </div>
@@ -660,59 +537,6 @@
     function buildWhatsAppLink(item) { const text = encodeURIComponent(`Hi ${item.contactPerson},\n\nJust checking in on ${item.company}. Please review our latest follow-up and next steps.\n\nBest,\n${item.loggedBy || 'Team'}`); return `https://wa.me/${(item.phone || '').replace(/\D/g, '')}?text=${text}`; }
     function buildEmailLink(item) { const subject = encodeURIComponent(`Follow-up for ${item.company}`); const body = encodeURIComponent(`Hi ${item.contactPerson},\n\nI wanted to follow up on ${item.company}.\n\nBest regards,\n${item.loggedBy || 'Team'}`); return `mailto:${item.email || ''}?subject=${subject}&body=${body}`; }
 
-    // ── SIDEBAR PAGE SWITCHING ──────────────────────────────────────────────
-    const PAGE_META = {
-      dashboard: { title: 'Dashboard', subtitle: 'Targets, follow-ups due, and a snapshot of the pipeline.' },
-      pipeline: { title: 'Pipeline', subtitle: 'Search, filter, and manage every prospect in the shared pipeline.' },
-      history: { title: 'History', subtitle: 'Month-over-month target vs. actual performance.' }
-    };
-    function switchPage(name) {
-      document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
-      document.getElementById(`page-${name}`)?.classList.add('active');
-      document.querySelectorAll('.side-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.page === name));
-      const meta = PAGE_META[name];
-      if (meta) { document.getElementById('pageTitle').textContent = meta.title; document.getElementById('pageSubtitle').textContent = meta.subtitle; }
-    }
-    document.querySelectorAll('.side-btn').forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.page)));
-
-    // ── TRASH SLIDE-OVER (icon-triggered, per request — not shown by default) ──
-    function openTrashPanel() {
-      document.getElementById('trashPanel').classList.add('open');
-      document.getElementById('trashBackdrop').classList.add('open');
-      document.getElementById('trashBtn').setAttribute('aria-expanded', 'true');
-    }
-    function closeTrashPanel() {
-      document.getElementById('trashPanel').classList.remove('open');
-      document.getElementById('trashBackdrop').classList.remove('open');
-      document.getElementById('trashBtn').setAttribute('aria-expanded', 'false');
-    }
-    document.getElementById('trashBtn').addEventListener('click', openTrashPanel);
-    document.getElementById('closeTrashBtn').addEventListener('click', closeTrashPanel);
-    document.getElementById('trashBackdrop').addEventListener('click', closeTrashPanel);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTrashPanel(); });
-
-    // ── ACTIVITY DROPDOWN (icon-triggered, per request — not shown by default) ──
-    function toggleActivityDropdown(forceOpen) {
-      const panel = document.getElementById('activityDropdown');
-      const btn = document.getElementById('activityBtn');
-      const open = forceOpen ?? !panel.classList.contains('open');
-      panel.classList.toggle('open', open);
-      btn.setAttribute('aria-expanded', String(open));
-    }
-    document.getElementById('activityBtn').addEventListener('click', e => { e.stopPropagation(); toggleActivityDropdown(); });
-    document.addEventListener('click', e => {
-      const panel = document.getElementById('activityDropdown');
-      if (panel.classList.contains('open') && !panel.contains(e.target) && e.target.id !== 'activityBtn') toggleActivityDropdown(false);
-    });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleActivityDropdown(false); });
-
-    // Small unread-style dots on the Trash/Activity icons so their now-hidden contents stay
-    // discoverable — otherwise there'd be no visual cue that either panel has anything in it.
-    function updateHeaderBadges() {
-      document.getElementById('trashDot').style.display = state.trash.length ? 'block' : 'none';
-      document.getElementById('activityDot').style.display = state.activity.length ? 'block' : 'none';
-    }
-
     document.getElementById('newEntryBtn').addEventListener('click', () => openModal());
     document.getElementById('closeModalBtn').addEventListener('click', closeModal);
     document.getElementById('entryForm').addEventListener('submit', addOrUpdateEntry);
@@ -725,8 +549,9 @@
     document.getElementById('sortField').addEventListener('change', e => { sortField = e.target.value; renderTable(); });
     document.getElementById('clearFiltersBtn').addEventListener('click', () => { filterText=''; filterStatus='all'; sortField='nextFollowUpDate'; document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = 'all'; document.getElementById('sortField').value = 'nextFollowUpDate'; renderTable(); });
 
-    function render() { document.getElementById('revenueTargetInput').value = state.revenueTarget; document.getElementById('leadTargetInput').value = state.leadTarget; renderStats(); renderProgress(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); updateHeaderBadges(); }
+    function render() { document.getElementById('revenueTargetInput').value = state.revenueTarget; document.getElementById('leadTargetInput').value = state.leadTarget; renderStats(); renderProgress(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); }
     initStorage();
   </script>
 </body>
 </html>
+
