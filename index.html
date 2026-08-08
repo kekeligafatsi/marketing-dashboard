@@ -119,12 +119,19 @@
     }
     .small { font-size: 0.8rem; color: var(--grey); }
 
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+    .modal-backdrop { position: fixed; inset: 0; height: 100vh; height: 100dvh; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
     .modal-backdrop.open { display: flex; }
     /* Header and Save/Delete actions stay fixed in place; only the form fields
        between them scroll — otherwise the buttons end up at the bottom of a long
        scrolling form and are easy to miss or clip against the modal edge. */
-    .modal { width: min(780px, 100%); max-height: calc(100vh - 32px); overflow: hidden; background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; }
+    /* 100vh on mobile Safari is the *largest* possible viewport (toolbars hidden),
+       not what's actually visible — with the address/tab bar showing (the normal
+       case), a modal sized off 100vh runs taller than the real visible area and
+       its pinned footer ends up below the fold, behind the browser's own chrome.
+       100dvh tracks the actual visible viewport; the plain 100vh above it is a
+       fallback for browsers that don't support dvh (its invalid value is ignored
+       there, leaving the first declaration in effect). */
+    .modal { width: min(780px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: hidden; background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; }
     .modal form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     .form-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
     /* Scoped separately (not merged into .form-grid above) so this doesn't raise
