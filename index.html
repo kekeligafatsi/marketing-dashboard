@@ -435,10 +435,15 @@
           lastSyncOk = false;
         }
       }
-      archiveMonthIfNeeded();
+      // Only push a write back to Supabase here if the archive step actually changed
+      // something — writing back unconditionally on every load bumps updated_at with
+      // no real content change, which makes any other idle tab/device's mere page load
+      // look like a genuine concurrent edit to persistToSupabase()'s conflict check
+      // below, silently discarding someone else's real in-progress edit.
+      const archived = archiveMonthIfNeeded();
       render();
       updateSyncBanner();
-      if (supabaseConfigured) await persistToSupabase();
+      if (supabaseConfigured && archived) await persistToSupabase();
     }
 
     // Re-attempts sync on every call (no permanent disabling on a transient error), and does a
@@ -486,13 +491,14 @@
     function archiveMonthIfNeeded() {
       const monthKey = getMonthKey(new Date());
       const lastArchive = state.history[state.history.length - 1];
-      if (lastArchive && lastArchive.monthKey === monthKey) return;
+      if (lastArchive && lastArchive.monthKey === monthKey) return false;
       const revenueActual = sumWonRevenueForMonth(monthKey);
       const leadActual = countEntriesByMonth(monthKey);
       state.history.push({ monthKey, monthLabel: formatMonthLabel(monthKey), revenueTarget: state.revenueTarget, revenueActual, leadTarget: state.leadTarget, leadActual, archivedAt: new Date().toISOString() });
       state.history = state.history.slice(-6);
       state.activity.unshift({ id: crypto.randomUUID(), text: `Auto-archived ${formatMonthLabel(monthKey)} target history`, createdAt: new Date().toISOString() });
       state.activity = state.activity.slice(0, 50);
+      return true;
     }
 
     function getMonthKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; }
