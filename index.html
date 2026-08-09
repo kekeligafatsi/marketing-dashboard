@@ -486,9 +486,13 @@
         }
         const nowIso = new Date().toISOString();
         const payload = { key: 'marketing-dashboard', value: state, updated_at: nowIso };
-        const { error } = await supabaseClient.from('dashboard_state').upsert(payload, { onConflict: 'key' });
+        // A DB trigger (dashboard_state_set_updated_at) overwrites updated_at with the
+        // server's own clock on every write, so the client-computed nowIso above never
+        // matches what's actually stored — read back the real value the trigger wrote
+        // instead of trusting our own guess, or the very next save falsely looks conflicted.
+        const { data: written, error } = await supabaseClient.from('dashboard_state').upsert(payload, { onConflict: 'key' }).select('updated_at').single();
         if (error) throw error;
-        lastKnownRemoteUpdatedAt = nowIso;
+        lastKnownRemoteUpdatedAt = written?.updated_at || nowIso;
         lastSyncOk = true;
       } catch (err) {
         console.warn('Unable to sync to Supabase.', err);
