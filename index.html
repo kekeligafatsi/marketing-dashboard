@@ -304,6 +304,7 @@
         <h3 id="modalTitle">New Prospect / Client</h3>
         <button id="closeModalBtn" class="secondary">Close</button>
       </div>
+      <div id="signInReminder" class="small" style="display:none; margin-bottom:14px; padding:10px 14px; border-radius:8px; background:var(--yellow-light); border:1px solid var(--yellow); color:#8a5c00; flex-shrink:0;"></div>
       <form id="entryForm">
         <div class="form-grid">
           <input type="hidden" id="entryId" />
@@ -817,6 +818,15 @@
       document.getElementById('notes').value = entry?.notes || '';
       title.textContent = entry ? 'Edit Prospect / Client' : 'New Prospect / Client';
       deleteBtn.style.display = entry ? 'inline-flex' : 'none';
+      // Soft nudge only, not a block: signing in is what makes this lead count toward a
+      // rep's target, but nothing here stops an owner (or a rep who skips it) from saving.
+      const reminder = document.getElementById('signInReminder');
+      if (!entry && !currentUser && supabaseConfigured) {
+        reminder.textContent = 'Not signed in — this lead will be logged without a rep/target attached. Sales reps: sign in first (top right) so it counts toward your target.';
+        reminder.style.display = 'block';
+      } else {
+        reminder.style.display = 'none';
+      }
       lastFocusedBeforeModal = document.activeElement;
       modal.classList.add('open');
       document.getElementById('company').focus();
