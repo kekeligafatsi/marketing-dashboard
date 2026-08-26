@@ -1,6 +1,6 @@
 # Marketing Dashboard
 
-A single-page sales and lead pipeline tracker built for the Dekells/GRiT sales and marketing team. It gives the team a shared, no-login dashboard for logging prospects and clients, tracking deal status and follow-up dates, watching progress against a monthly revenue and lead target, and seeing a running activity feed of who changed what. It is designed to be opened directly as a file or hosted as a static page — anyone with the link can view and edit the shared pipeline instantly.
+A single-page sales and lead pipeline tracker built for the Dekells/GRiT sales and marketing team. By default it's a shared, no-login dashboard for logging prospects and clients, tracking deal status and follow-up dates, watching progress against a monthly revenue and lead target, and seeing a running activity feed of who changed what. It is designed to be opened directly as a file or hosted as a static page — anyone with the link can view and edit the shared pipeline instantly. Sales reps can optionally sign in (Supabase Auth) to default to seeing only their own leads; see "Sales rep login" below — this is for individual tracking convenience, not a security boundary.
 
 ## Key features
 
@@ -14,6 +14,7 @@ A single-page sales and lead pipeline tracker built for the Dekells/GRiT sales a
 - **Month-over-month history** — on first load each month, the previous month's target vs. actual (revenue and leads) is automatically archived (last 6 months kept).
 - **One-click outreach links** — each pipeline row generates a pre-filled WhatsApp (`wa.me`) link and a `mailto:` link addressed to that contact.
 - **Optional live shared sync** — if a Supabase project is configured, all state syncs to a shared `dashboard_state` table so multiple people see the same live data; otherwise it falls back to per-browser `localStorage`.
+- **Optional sales rep login** — a rep can sign in (top-right "Sales Rep Sign In") with a Supabase Auth account to have new leads auto-attributed to them and to default the whole dashboard to their own leads only, with per-lead edit/delete restricted to their own entries. Owners keep the unchanged no-login view and get a "filter by rep" dropdown on the Pipeline page to see any rep's numbers individually. See "Sales rep login" below.
 
 ## Tech stack
 
@@ -28,6 +29,16 @@ There is no build step and no package manager involved.
 - **To host it**: upload `index.html` to any static host (GitHub Pages, Netlify, S3, etc.) — no server-side code is required.
 
 There are no npm scripts, no tests, and no CI configuration in this project.
+
+## Sales rep login
+
+There's no signup/invite screen — a sales rep account is created manually by the business owner:
+
+1. In the Supabase dashboard, go to **Authentication → Users → Add user**, and create an email/password account for the rep.
+2. Set the user's **metadata** to `{ "full_name": "Their Name" }` so the dashboard shows a real name instead of their raw email in "Logged By" and the activity feed.
+3. Give the rep the email/password to sign in with via the "Sales Rep Sign In" button in the dashboard's top-right.
+
+This scales to any number of future hires — just repeat the steps above per person, no app changes needed. Note this is soft, client-side scoping for individual tracking, not real data isolation: the dashboard's Supabase table has no row-level security, so the public anon key can still read/write the whole shared pipeline regardless of who (if anyone) is signed in — exactly as it already could before rep login existed.
 
 ## Project structure
 

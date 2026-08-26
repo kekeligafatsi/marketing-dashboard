@@ -10,7 +10,7 @@ None. This is a single self-contained HTML file with a `<style>` block and a `<s
 
 ## Key libraries
 
-- **`@supabase/supabase-js@2`** — loaded from the jsDelivr CDN (`https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`). Used exclusively as an optional persistence/sync layer: creating a client with `window.supabase.createClient(...)`, and reading/writing a single row in the `dashboard_state` table. No other Supabase features (auth, storage, realtime channels) are used — `auth: { persistSession: false }` is explicitly set since the app has no login.
+- **`@supabase/supabase-js@2`** — loaded from the jsDelivr CDN (`https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`). Used as an optional persistence/sync layer (creating a client with `window.supabase.createClient(...)`, and reading/writing a single row in the `dashboard_state` table) and, optionally, for sales-rep identity: `auth.signInWithPassword`, `auth.signOut`, `auth.getSession`, and `auth.onAuthStateChange` back a lightweight sign-in used only to default the dashboard to a rep's own leads (`assignedToId`). `persistSession` is `true` (flipped from the original `false`) so a signed-in rep stays signed in across reloads. There's deliberately no signup/invite UI — accounts are provisioned manually by the owner via the Supabase dashboard (see the README's "Sales rep login" section). Storage, realtime channels, and any other Supabase feature remain unused.
 
 No other third-party JS libraries, CSS frameworks, icon sets, or fonts are used — fonts fall back to the system stack (`Arial, Helvetica, sans-serif`).
 

@@ -98,7 +98,7 @@
     .flag-overdue { border-left: 4px solid var(--red); }
     .flag-soon { border-left: 4px solid var(--yellow); }
 
-    .toolbar { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
+    .toolbar { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
     .toolbar input, .toolbar select { width: 100%; padding: 9px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--white); color: var(--black); }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -202,6 +202,7 @@
           <p id="pageSubtitle">Targets, follow-ups due, and a snapshot of the pipeline.</p>
         </div>
         <div class="header-actions">
+          <div id="authControl" class="small" style="display:flex; align-items:center; gap:8px;"></div>
           <button id="newEntryBtn">+ New Prospect</button>
           <button id="refreshBtn" class="secondary">Refresh View</button>
           <button id="activityBtn" class="icon-btn" type="button" title="Activity Feed" aria-haspopup="true" aria-expanded="false">
@@ -265,6 +266,7 @@
                 <option value="status">Sort by status</option>
                 <option value="dealValue">Sort by value</option>
               </select>
+              <select id="repFilter"></select>
               <button id="clearFiltersBtn" class="secondary">Clear Filters</button>
             </div>
             <table>
@@ -281,7 +283,7 @@
           </section>
           <section class="card" style="margin-top:16px">
             <div class="section-title">Quick Notes</div>
-            <div class="subtle">No login is needed. Anyone with the link can update the pipeline instantly. The dashboard is connected to the shared Supabase project for live shared storage.</div>
+            <div class="subtle">No login is needed to use the dashboard as before — anyone with the link can view and update the shared pipeline instantly. Sales reps can optionally sign in (top right) to see only their own leads; this is for individual tracking convenience, not a security boundary — the shared Supabase storage is still fully readable/writable via the public link either way.</div>
           </section>
         </div>
       </div>
@@ -311,6 +313,7 @@
       <form id="entryForm">
         <div class="form-grid">
           <input type="hidden" id="entryId" />
+          <input type="hidden" id="assignedToId" />
           <label class="full"><div class="small">Company / Organization</div><input id="company" required /></label>
           <label><div class="small">Contact Person</div><input id="contactPerson" required /></label>
           <label><div class="small">Phone</div><input id="phone" /></label>
@@ -325,6 +328,25 @@
         <div class="actions" style="justify-content:flex-end; display:flex; gap:10px;">
           <button type="submit">Save Entry</button>
           <button type="button" id="deleteEntryBtn" class="danger">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="loginModal" class="modal-backdrop">
+    <div class="modal" style="width:min(380px, 100%);" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+      <div class="modal-head">
+        <h3 id="loginModalTitle">Sales Rep Sign In</h3>
+        <button id="closeLoginModalBtn" class="secondary" type="button">Close</button>
+      </div>
+      <form id="loginForm">
+        <div class="form-grid" style="grid-template-columns:1fr;">
+          <label class="full"><div class="small">Email</div><input id="loginEmail" type="email" autocomplete="username" required /></label>
+          <label class="full"><div class="small">Password</div><input id="loginPassword" type="password" autocomplete="current-password" required /></label>
+          <div class="subtle full">Accounts are created by the business owner. Contact them if you don't have login details yet.</div>
+        </div>
+        <div class="actions" style="justify-content:flex-end; display:flex; gap:10px;">
+          <button type="submit">Sign In</button>
         </div>
       </form>
     </div>
@@ -365,6 +387,10 @@
     let supabaseConfigured = false;
     let lastSyncOk = true;
     let lastKnownRemoteUpdatedAt = null;
+    // Identifies which sales rep (if any) is using the app right now, for default
+    // filtering/attribution only — see the tradeoff note at supabase.auth sign-in below.
+    let currentUser = null;       // { id, email, displayName } | null
+    let ownerRepFilter = 'all';   // owner-only "filter pipeline by rep" selection
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -391,6 +417,7 @@
         lastContactDate: typeof raw.lastContactDate === 'string' ? raw.lastContactDate : '',
         nextFollowUpDate: typeof raw.nextFollowUpDate === 'string' ? raw.nextFollowUpDate : '',
         loggedBy: typeof raw.loggedBy === 'string' ? raw.loggedBy : '',
+        assignedToId: typeof raw.assignedToId === 'string' && raw.assignedToId ? raw.assignedToId : null,
         createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
         updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
       };
@@ -434,13 +461,46 @@
       else { banner.style.display = 'block'; banner.textContent = 'Sync issue — your changes are saved locally and will retry automatically on the next edit.'; }
     }
 
+    async function refreshCurrentUser(session) {
+      const user = session?.user || null;
+      currentUser = user ? {
+        id: user.id,
+        email: user.email,
+        displayName: user.user_metadata?.full_name?.trim() || user.email
+      } : null;
+    }
+
+    async function signInSalesRep(email, password) {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) { showToast(error.message || 'Sign in failed. Check your email and password.'); return false; }
+      showToast('Signed in.');
+      return true;
+    }
+    async function signOutSalesRep() {
+      await supabaseClient.auth.signOut();
+      showToast('Signed out.');
+    }
+
     async function initStorage() {
       state = loadState();
       const configuredUrl = window.MARKETING_DASHBOARD_CONFIG?.supabaseUrl?.trim();
       const configuredKey = window.MARKETING_DASHBOARD_CONFIG?.supabaseAnonKey?.trim();
       if (configuredUrl && configuredKey && window.supabase) {
         supabaseConfigured = true;
-        supabaseClient = window.supabase.createClient(configuredUrl, configuredKey, { auth: { persistSession: false } });
+        // persistSession: true so a signed-in sales rep stays signed in across reloads.
+        // NOTE: this login identifies *who is using the app* for default filtering/attribution
+        // only — it is NOT a security boundary. The anon key below still has full read/write
+        // access to the whole shared dashboard_state row regardless of who (if anyone) is
+        // signed in, exactly as before this feature existed (no RLS is configured for this app).
+        supabaseClient = window.supabase.createClient(configuredUrl, configuredKey, { auth: { persistSession: true } });
+        try {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          await refreshCurrentUser(session);
+        } catch (err) {
+          console.warn('Unable to restore sales-rep session.', err);
+          currentUser = null;
+        }
+        supabaseClient.auth.onAuthStateChange((event, session) => { refreshCurrentUser(session); render(); });
         try {
           const { data, error } = await supabaseClient.from('dashboard_state').select('value, updated_at').eq('key', 'marketing-dashboard').maybeSingle();
           if (error) throw error;
@@ -523,11 +583,24 @@
 
     function getMonthKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; }
     function formatMonthLabel(monthKey) { const [year,month] = monthKey.split('-').map(Number); return new Date(year, month-1, 1).toLocaleString('en', { month: 'long', year: 'numeric' }); }
-    function sumWonRevenueForMonth(monthKey) { return state.entries.filter(entry => entry.status === 'won').filter(entry => getMonthKey(new Date(entry.wonAt || entry.updatedAt || entry.createdAt)) === monthKey).reduce((sum,item)=>sum + Number(item.dealValue||0),0); }
-    function countEntriesByMonth(monthKey) { return state.entries.filter(entry => getMonthKey(new Date(entry.createdAt)) === monthKey).length; }
+    function sumWonRevenueForMonth(monthKey, entries = state.entries) { return entries.filter(entry => entry.status === 'won').filter(entry => getMonthKey(new Date(entry.wonAt || entry.updatedAt || entry.createdAt)) === monthKey).reduce((sum,item)=>sum + Number(item.dealValue||0),0); }
+    function countEntriesByMonth(monthKey, entries = state.entries) { return entries.filter(entry => getMonthKey(new Date(entry.createdAt)) === monthKey).length; }
+    // Grouping key for the owner's "filter by rep" control — falls back to the free-text
+    // loggedBy name for legacy entries that predate the assignedToId field.
+    function repKeyFor(entry) { return entry.assignedToId || entry.loggedBy || null; }
+    // A signed-in rep only ever sees their own leads (no team-view toggle, by design).
+    // A signed-out owner sees everything, optionally narrowed by the rep filter dropdown.
+    function getScopedEntries() {
+      if (currentUser) return state.entries.filter(e => e.assignedToId === currentUser.id);
+      if (ownerRepFilter !== 'all') {
+        if (ownerRepFilter === '__unassigned__') return state.entries.filter(e => !repKeyFor(e));
+        return state.entries.filter(e => repKeyFor(e) === ownerRepFilter);
+      }
+      return state.entries;
+    }
     function getDueItems() {
       const today = new Date(); const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate()); const weekEnd = new Date(todayOnly); weekEnd.setDate(weekEnd.getDate() + 7);
-      return state.entries.filter(entry => entry.nextFollowUpDate || entry.lastContactDate).map(entry => {
+      return getScopedEntries().filter(entry => entry.nextFollowUpDate || entry.lastContactDate).map(entry => {
         const next = entry.nextFollowUpDate ? new Date(`${entry.nextFollowUpDate}T00:00:00`) : null;
         const overdue = next && next < todayOnly;
         const soon = next && next >= todayOnly && next <= weekEnd;
@@ -542,28 +615,31 @@
     }
     function renderStats() {
       const statsGrid = document.getElementById('statsGrid');
+      const scoped = getScopedEntries();
+      const scopeLabel = currentUser ? 'you' : (ownerRepFilter !== 'all' ? 'this rep' : 'shared pipeline');
       const currentMonth = getMonthKey(new Date());
-      const wonCount = state.entries.filter(item => item.status === 'won' && getMonthKey(new Date(item.wonAt || item.updatedAt || item.createdAt)) === currentMonth).length;
-      const wonValue = sumWonRevenueForMonth(currentMonth);
-      const totalEntries = state.entries.length;
-      const winRate = totalEntries ? Math.round((state.entries.filter(item => item.status === 'won').length / totalEntries) * 100) : 0;
+      const wonCount = scoped.filter(item => item.status === 'won' && getMonthKey(new Date(item.wonAt || item.updatedAt || item.createdAt)) === currentMonth).length;
+      const wonValue = sumWonRevenueForMonth(currentMonth, scoped);
+      const totalEntries = scoped.length;
+      const winRate = totalEntries ? Math.round((scoped.filter(item => item.status === 'won').length / totalEntries) * 100) : 0;
       const overdueItems = getDueItems().filter(item => item.overdue).length;
       const stats = [
-        { label: 'Won this month', value: `${wonCount} ${wonCount === 1 ? 'deal' : 'deals'}`, extra: formatMoney(wonValue) },
-        { label: 'Win rate', value: `${winRate}%`, extra: 'shared pipeline' },
+        { label: currentUser ? 'You won this month' : 'Won this month', value: `${wonCount} ${wonCount === 1 ? 'deal' : 'deals'}`, extra: formatMoney(wonValue) },
+        { label: 'Win rate', value: `${winRate}%`, extra: scopeLabel },
         { label: 'Overdue items', value: `${overdueItems}`, extra: 'needs attention now' },
         { label: 'Lead target', value: `${state.leadTarget}`, extra: 'entries / month' },
         { label: 'Revenue target', value: formatMoney(state.revenueTarget), extra: 'monthly team goal' },
-        { label: 'Open deals', value: `${state.entries.filter(item => item.status !== 'lost' && item.status !== 'won').length}`, extra: 'working pipeline' }
+        { label: 'Open deals', value: `${scoped.filter(item => item.status !== 'lost' && item.status !== 'won').length}`, extra: scopeLabel }
       ];
       statsGrid.innerHTML = stats.map(stat => `<div class="card stat-card"><span>${stat.label}</span><strong>${stat.value}</strong><div class="subtle">${stat.extra}</div></div>`).join('');
     }
     function renderProgress() {
-      const revenueActual = sumWonRevenueForMonth(getMonthKey(new Date()));
+      const scoped = getScopedEntries();
+      const revenueActual = sumWonRevenueForMonth(getMonthKey(new Date()), scoped);
       const revenuePercent = Math.min(100, Math.round((revenueActual / Math.max(1, Number(state.revenueTarget))) * 100));
       document.getElementById('revenueProgress').style.width = `${revenuePercent}%`;
       document.getElementById('revenueProgressLabel').textContent = `${formatMoney(revenueActual)} of ${formatMoney(state.revenueTarget)} reached (${revenuePercent}%)`;
-      const leadActual = countEntriesByMonth(getMonthKey(new Date()));
+      const leadActual = countEntriesByMonth(getMonthKey(new Date()), scoped);
       const leadPercent = Math.min(100, Math.round((leadActual / Math.max(1, Number(state.leadTarget))) * 100));
       document.getElementById('leadProgress').style.width = `${leadPercent}%`;
       document.getElementById('leadProgressLabel').textContent = `${leadActual} leads logged versus ${state.leadTarget} target (${leadPercent}%)`;
@@ -587,24 +663,55 @@
       const container = document.getElementById('historyList');
       container.innerHTML = state.history.map(item => `<div class="history-item"><strong>${item.monthLabel}</strong><div class="small">Target: ${formatMoney(item.revenueTarget)} · Actual: ${formatMoney(item.revenueActual)} · Leads: ${item.leadActual}/${item.leadTarget}</div></div>`).join('');
     }
+    // Populated dynamically from whichever reps actually have entries, so it scales to
+    // new hires automatically with no code change. Owner-only — reps never see it, since
+    // decision was "only their own leads, always" with no team-view toggle.
+    function renderRepFilterOptions() {
+      const select = document.getElementById('repFilter');
+      if (currentUser) { select.style.display = 'none'; return; }
+      select.style.display = '';
+      const labels = new Map();
+      state.entries.forEach(entry => { const key = repKeyFor(entry); if (key && !labels.has(key)) labels.set(key, entry.loggedBy || key); });
+      select.innerHTML = `<option value="all">All reps</option>` +
+        Array.from(labels.entries()).map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join('') +
+        `<option value="__unassigned__">Unassigned / legacy</option>`;
+      select.value = ownerRepFilter;
+    }
+    function renderAuthControl() {
+      const container = document.getElementById('authControl');
+      if (!supabaseConfigured) { container.innerHTML = ''; return; }
+      if (currentUser) {
+        container.innerHTML = `<span>Signed in as <strong>${escapeHtml(currentUser.displayName)}</strong></span><button id="signOutBtn" class="secondary" type="button">Sign Out</button>`;
+        document.getElementById('signOutBtn').addEventListener('click', signOutSalesRep);
+      } else {
+        container.innerHTML = `<button id="signInBtn" class="secondary" type="button">Sales Rep Sign In</button>`;
+        document.getElementById('signInBtn').addEventListener('click', openLoginModal);
+      }
+    }
     function renderTable() {
       const tbody = document.getElementById('pipelineTableBody');
       const search = filterText.toLowerCase();
-      const items = state.entries.filter(item => { if (filterStatus !== 'all' && item.status !== filterStatus) return false; if (!search) return true; return [`${item.company}`, `${item.contactPerson}`, `${item.phone}`, `${item.email}`].some(val => (val || '').toLowerCase().includes(search)); }).sort((a,b) => { if (sortField === 'company') return (a.company || '').localeCompare(b.company || ''); if (sortField === 'status') return (a.status || '').localeCompare(b.status || ''); if (sortField === 'dealValue') return Number(b.dealValue || 0) - Number(a.dealValue || 0); return (a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || ''); });
+      const scoped = getScopedEntries();
+      const items = scoped.filter(item => { if (filterStatus !== 'all' && item.status !== filterStatus) return false; if (!search) return true; return [`${item.company}`, `${item.contactPerson}`, `${item.phone}`, `${item.email}`].some(val => (val || '').toLowerCase().includes(search)); }).sort((a,b) => { if (sortField === 'company') return (a.company || '').localeCompare(b.company || ''); if (sortField === 'status') return (a.status || '').localeCompare(b.status || ''); if (sortField === 'dealValue') return Number(b.dealValue || 0) - Number(a.dealValue || 0); return (a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || ''); });
       if (!items.length) {
-        const message = state.entries.length === 0
+        const message = scoped.length === 0
           ? 'No prospects yet — click "+ New Prospect" to add one.'
           : 'No prospects match your filters.';
         tbody.innerHTML = `<tr><td colspan="6" class="small" style="text-align:center; padding:24px 8px;">${message}</td></tr>`;
         return;
       }
-      tbody.innerHTML = items.map(item => `<tr><td><strong>${escapeHtml(item.company)}</strong><br /><span class="small">${escapeHtml(item.notes || 'No notes added')}</span></td><td>${escapeHtml(item.contactPerson)}<br /><span class="small">${escapeHtml(item.phone || item.email || 'No phone or email')}</span></td><td>${formatMoney(item.dealValue)}</td><td><span class="status-badge ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(formatDate(item.nextFollowUpDate))}</td><td class="table-actions"><button data-edit-id="${escapeHtml(item.id)}" class="secondary">Edit</button><button data-delete-id="${escapeHtml(item.id)}" class="danger">Delete</button><a href="${buildWhatsAppLink(item)}" target="_blank">WhatsApp</a><a href="${buildEmailLink(item)}" target="_blank">Email</a></td></tr>`).join('');
+      tbody.innerHTML = items.map(item => { const canEdit = !currentUser || item.assignedToId === currentUser.id; return `<tr><td><strong>${escapeHtml(item.company)}</strong><br /><span class="small">${escapeHtml(item.notes || 'No notes added')}</span></td><td>${escapeHtml(item.contactPerson)}<br /><span class="small">${escapeHtml(item.phone || item.email || 'No phone or email')}</span></td><td>${formatMoney(item.dealValue)}</td><td><span class="status-badge ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(formatDate(item.nextFollowUpDate))}</td><td class="table-actions">${canEdit ? `<button data-edit-id="${escapeHtml(item.id)}" class="secondary">Edit</button><button data-delete-id="${escapeHtml(item.id)}" class="danger">Delete</button>` : ''}<a href="${buildWhatsAppLink(item)}" target="_blank">WhatsApp</a><a href="${buildEmailLink(item)}" target="_blank">Email</a></td></tr>`; }).join('');
       tbody.querySelectorAll('[data-edit-id]').forEach(btn => btn.addEventListener('click', () => openModal(btn.getAttribute('data-edit-id'))));
       tbody.querySelectorAll('[data-delete-id]').forEach(btn => btn.addEventListener('click', () => removeEntry(btn.getAttribute('data-delete-id'))));
     }
     let lastFocusedBeforeModal = null;
     function openModal(id = null) {
-      const modal = document.getElementById('entryModal'); const form = document.getElementById('entryForm'); const title = document.getElementById('modalTitle'); const deleteBtn = document.getElementById('deleteEntryBtn'); const entry = state.entries.find(item => item.id === id);
+      const entry = state.entries.find(item => item.id === id);
+      if (entry && currentUser && entry.assignedToId !== currentUser.id) {
+        showToast('You can only edit your own leads.');
+        return;
+      }
+      const modal = document.getElementById('entryModal'); const form = document.getElementById('entryForm'); const title = document.getElementById('modalTitle'); const deleteBtn = document.getElementById('deleteEntryBtn');
       form.reset();
       document.getElementById('entryId').value = entry ? entry.id : '';
       document.getElementById('company').value = entry?.company || '';
@@ -615,7 +722,18 @@
       document.getElementById('status').value = entry?.status || 'contacted';
       document.getElementById('lastContactDate').value = entry?.lastContactDate || '';
       document.getElementById('nextFollowUpDate').value = entry?.nextFollowUpDate || '';
-      document.getElementById('loggedBy').value = entry?.loggedBy || '';
+      const loggedByInput = document.getElementById('loggedBy');
+      // A signed-in rep's name/id is stamped from their session, not typed — keeps
+      // attribution honest without adding real access control (see auth NOTE above).
+      if (currentUser) {
+        loggedByInput.value = currentUser.displayName;
+        loggedByInput.readOnly = true;
+        document.getElementById('assignedToId').value = currentUser.id;
+      } else {
+        loggedByInput.value = entry?.loggedBy || '';
+        loggedByInput.readOnly = false;
+        document.getElementById('assignedToId').value = entry?.assignedToId || '';
+      }
       document.getElementById('notes').value = entry?.notes || '';
       title.textContent = entry ? 'Edit Prospect / Client' : 'New Prospect / Client';
       deleteBtn.style.display = entry ? 'inline-flex' : 'none';
@@ -625,6 +743,18 @@
     }
     function closeModal() {
       document.getElementById('entryModal').classList.remove('open');
+      if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') lastFocusedBeforeModal.focus();
+      lastFocusedBeforeModal = null;
+    }
+    function openLoginModal() {
+      const form = document.getElementById('loginForm');
+      form.reset();
+      lastFocusedBeforeModal = document.activeElement;
+      document.getElementById('loginModal').classList.add('open');
+      document.getElementById('loginEmail').focus();
+    }
+    function closeLoginModal() {
+      document.getElementById('loginModal').classList.remove('open');
       if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') lastFocusedBeforeModal.focus();
       lastFocusedBeforeModal = null;
     }
@@ -644,7 +774,11 @@
     function addOrUpdateEntry(event) {
       event.preventDefault();
       const id = document.getElementById('entryId').value;
-      const payload = { company: document.getElementById('company').value.trim(), contactPerson: document.getElementById('contactPerson').value.trim(), phone: document.getElementById('phone').value.trim(), email: document.getElementById('email').value.trim(), dealValue: Number(document.getElementById('dealValue').value), status: document.getElementById('status').value, lastContactDate: document.getElementById('lastContactDate').value, nextFollowUpDate: document.getElementById('nextFollowUpDate').value, loggedBy: document.getElementById('loggedBy').value.trim(), notes: document.getElementById('notes').value.trim(), updatedAt: new Date().toISOString() };
+      if (id) {
+        const existing = state.entries.find(item => item.id === id);
+        if (existing && currentUser && existing.assignedToId !== currentUser.id) { showToast('You can only edit your own leads.'); return; }
+      }
+      const payload = { company: document.getElementById('company').value.trim(), contactPerson: document.getElementById('contactPerson').value.trim(), phone: document.getElementById('phone').value.trim(), email: document.getElementById('email').value.trim(), dealValue: Number(document.getElementById('dealValue').value), status: document.getElementById('status').value, lastContactDate: document.getElementById('lastContactDate').value, nextFollowUpDate: document.getElementById('nextFollowUpDate').value, loggedBy: document.getElementById('loggedBy').value.trim(), assignedToId: document.getElementById('assignedToId').value || null, notes: document.getElementById('notes').value.trim(), updatedAt: new Date().toISOString() };
       if (!payload.company || !payload.contactPerson || !Number.isFinite(payload.dealValue) || payload.dealValue < 0) { showToast('Company, contact person and a valid (non-negative) deal value are required.'); return; }
       if (id) {
         const index = state.entries.findIndex(item => item.id === id);
@@ -664,6 +798,7 @@
     }
     function removeEntry(id) {
       const entry = state.entries.find(item => item.id === id); if (!entry) return;
+      if (currentUser && entry.assignedToId !== currentUser.id) { showToast('You can only delete your own leads.'); return; }
       if (!window.confirm(`Move ${entry.company} to Trash? This supports a safe undo and keeps a lightweight audit trail.`)) return;
       state.entries = state.entries.filter(item => item.id !== id);
       state.trash.unshift({ ...entry, deletedAt: new Date().toISOString() });
@@ -744,15 +879,26 @@
     document.getElementById('closeModalBtn').addEventListener('click', closeModal);
     document.getElementById('entryForm').addEventListener('submit', addOrUpdateEntry);
     document.getElementById('deleteEntryBtn').addEventListener('click', () => { const id = document.getElementById('entryId').value; if (id) removeEntry(id); closeModal(); });
+    document.getElementById('closeLoginModalBtn').addEventListener('click', closeLoginModal);
+    document.getElementById('loginModal').addEventListener('click', e => { if (e.target.id === 'loginModal') closeLoginModal(); });
+    document.getElementById('loginModal').addEventListener('keydown', e => { if (e.key === 'Escape') closeLoginModal(); });
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const ok = await signInSalesRep(email, password);
+      if (ok) closeLoginModal();
+    });
+    document.getElementById('repFilter').addEventListener('change', e => { ownerRepFilter = e.target.value; render(); });
     document.getElementById('refreshBtn').addEventListener('click', () => { archiveMonthIfNeeded(); render(); showToast('Dashboard refreshed.'); });
     document.getElementById('revenueTargetInput').addEventListener('change', e => { state.revenueTarget = Number(e.target.value || 0); saveState(); });
     document.getElementById('leadTargetInput').addEventListener('change', e => { state.leadTarget = Number(e.target.value || 0); saveState(); });
     document.getElementById('searchInput').addEventListener('input', e => { filterText = e.target.value; renderTable(); });
     document.getElementById('statusFilter').addEventListener('change', e => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('sortField').addEventListener('change', e => { sortField = e.target.value; renderTable(); });
-    document.getElementById('clearFiltersBtn').addEventListener('click', () => { filterText=''; filterStatus='all'; sortField='nextFollowUpDate'; document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = 'all'; document.getElementById('sortField').value = 'nextFollowUpDate'; renderTable(); });
+    document.getElementById('clearFiltersBtn').addEventListener('click', () => { filterText=''; filterStatus='all'; sortField='nextFollowUpDate'; ownerRepFilter='all'; document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = 'all'; document.getElementById('sortField').value = 'nextFollowUpDate'; render(); });
 
-    function render() { document.getElementById('revenueTargetInput').value = state.revenueTarget; document.getElementById('leadTargetInput').value = state.leadTarget; renderStats(); renderProgress(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); updateHeaderBadges(); }
+    function render() { document.getElementById('revenueTargetInput').value = state.revenueTarget; document.getElementById('leadTargetInput').value = state.leadTarget; renderAuthControl(); renderRepFilterOptions(); renderStats(); renderProgress(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); updateHeaderBadges(); }
     initStorage();
   </script>
 </body>
