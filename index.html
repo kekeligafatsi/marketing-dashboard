@@ -224,22 +224,16 @@
         <div class="page active" id="page-dashboard">
           <section class="grid" id="statsGrid"></section>
 
-          <section class="target-row">
-            <div class="card">
-              <div class="section-title">Monthly Revenue Target</div>
-              <div class="subtle">Shared team target in GH₵ (editable)</div>
-              <input id="revenueTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--black);" />
-              <div class="progress-shell"><div id="revenueProgress" class="progress-bar"></div></div>
-              <div class="subtle" id="revenueProgressLabel"></div>
-            </div>
-            <div class="card">
-              <div class="section-title">Monthly Lead Target</div>
-              <div class="subtle">Lead tracker progress vs actual count</div>
-              <input id="leadTargetInput" type="number" min="0" style="width:100%; margin-top:10px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--black);" />
-              <div class="progress-shell"><div id="leadProgress" class="progress-bar"></div></div>
-              <div class="subtle" id="leadProgressLabel"></div>
-            </div>
+          <section class="card" id="leaderboardCard" style="display:none">
+            <div class="section-title">Marketer Leaderboard</div>
+            <div class="subtle">This month — leads logged, deals won, and revenue by rep.</div>
+            <table>
+              <thead><tr><th>Rep</th><th>Leads</th><th>Won</th><th>Revenue</th><th>Win rate</th><th>Open deals</th></tr></thead>
+              <tbody id="leaderboardBody"></tbody>
+            </table>
           </section>
+
+          <section class="target-row" id="targetRow"></section>
 
           <section class="card">
             <div class="section-title">Due Today / This Week</div>
@@ -363,8 +357,10 @@
 
     const STORAGE_KEY = 'marketing-dashboard-state-v1';
     const DEFAULT_STATE = {
-      revenueTarget: 120000,
-      leadTarget: 25,
+      targets: {
+        sales_manager: { revenue: 60000, leads: 12 },
+        sales_officer: { revenue: 60000, leads: 12 }
+      },
       entries: [
         { id: 'demo-1', company: 'Golden Star Hotels', contactPerson: 'Kofi Tsikata', phone: '+233 20 123 4567', email: 'kofi@example.com', dealValue: 4200, status: 'won', notes: 'Renewal call in progress.', lastContactDate: new Date().toISOString().slice(0,10), nextFollowUpDate: new Date(Date.now()+86400000*2).toISOString().slice(0,10), loggedBy: 'Mimi', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), wonAt: new Date().toISOString() },
         { id: 'demo-2', company: 'Dekells Materials', contactPerson: 'Ama Mensah', phone: '+233 24 654 3210', email: 'ama@example.com', dealValue: 2800, status: 'follow-up-due', notes: 'Needs quote follow-up this week.', lastContactDate: new Date(Date.now()-86400000*3).toISOString().slice(0,10), nextFollowUpDate: new Date(Date.now()+86400000).toISOString().slice(0,10), loggedBy: 'Sylvester', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
@@ -378,6 +374,8 @@
     };
 
     const VALID_STATUSES = ['contacted', 'quoted', 'follow-up-due', 'won', 'lost'];
+    const VALID_ROLES = ['sales_manager', 'sales_officer'];
+    const ROLE_LABELS = { sales_manager: 'Sales Manager', sales_officer: 'Sales Officer' };
 
     let state = structuredClone(DEFAULT_STATE);
     let filterText = '';
@@ -418,6 +416,7 @@
         nextFollowUpDate: typeof raw.nextFollowUpDate === 'string' ? raw.nextFollowUpDate : '',
         loggedBy: typeof raw.loggedBy === 'string' ? raw.loggedBy : '',
         assignedToId: typeof raw.assignedToId === 'string' && raw.assignedToId ? raw.assignedToId : null,
+        assignedToRole: VALID_ROLES.includes(raw.assignedToRole) ? raw.assignedToRole : null,
         createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
         updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
       };
@@ -426,14 +425,30 @@
       return entry;
     }
 
+    // A pre-role-targets dashboard only had one shared revenueTarget/leadTarget number;
+    // when that's all a loaded document has, seed both roles from it as a starting point
+    // instead of silently resetting the owner's already-configured target to a default.
+    function sanitizeTargets(raw, legacyRevenue, legacyLead) {
+      const fallbackRevenue = Number.isFinite(legacyRevenue) && legacyRevenue >= 0 ? legacyRevenue : 0;
+      const fallbackLeads = Number.isFinite(legacyLead) && legacyLead >= 0 ? legacyLead : 0;
+      const out = {};
+      VALID_ROLES.forEach(role => {
+        const r = raw && typeof raw === 'object' ? raw[role] : null;
+        const revenue = Number(r?.revenue);
+        const leads = Number(r?.leads);
+        out[role] = {
+          revenue: Number.isFinite(revenue) && revenue >= 0 ? revenue : fallbackRevenue,
+          leads: Number.isFinite(leads) && leads >= 0 ? leads : fallbackLeads
+        };
+      });
+      return out;
+    }
+
     function sanitizeState(raw) {
       const base = structuredClone(DEFAULT_STATE);
       if (!raw || typeof raw !== 'object') return base;
-      const revenueTarget = Number(raw.revenueTarget);
-      const leadTarget = Number(raw.leadTarget);
       return {
-        revenueTarget: Number.isFinite(revenueTarget) && revenueTarget >= 0 ? revenueTarget : base.revenueTarget,
-        leadTarget: Number.isFinite(leadTarget) && leadTarget >= 0 ? leadTarget : base.leadTarget,
+        targets: sanitizeTargets(raw.targets, Number(raw.revenueTarget), Number(raw.leadTarget)),
         entries: Array.isArray(raw.entries) ? raw.entries.map(sanitizeEntry).filter(Boolean) : [],
         activity: Array.isArray(raw.activity)
           ? raw.activity.filter(item => item && typeof item.text === 'string').slice(0, 50).map(item => ({
@@ -463,10 +478,12 @@
 
     async function refreshCurrentUser(session) {
       const user = session?.user || null;
+      const rawRole = user?.user_metadata?.role;
       currentUser = user ? {
         id: user.id,
         email: user.email,
-        displayName: user.user_metadata?.full_name?.trim() || user.email
+        displayName: user.user_metadata?.full_name?.trim() || user.email,
+        role: VALID_ROLES.includes(rawRole) ? rawRole : null
       } : null;
     }
 
@@ -574,7 +591,11 @@
       if (lastArchive && lastArchive.monthKey === monthKey) return false;
       const revenueActual = sumWonRevenueForMonth(monthKey);
       const leadActual = countEntriesByMonth(monthKey);
-      state.history.push({ monthKey, monthLabel: formatMonthLabel(monthKey), revenueTarget: state.revenueTarget, revenueActual, leadTarget: state.leadTarget, leadActual, archivedAt: new Date().toISOString() });
+      // History predates the per-role targets split — archive the combined (Sales Manager +
+      // Sales Officer) total so month-over-month history keeps showing one company-wide figure.
+      const revenueTarget = state.targets.sales_manager.revenue + state.targets.sales_officer.revenue;
+      const leadTarget = state.targets.sales_manager.leads + state.targets.sales_officer.leads;
+      state.history.push({ monthKey, monthLabel: formatMonthLabel(monthKey), revenueTarget, revenueActual, leadTarget, leadActual, archivedAt: new Date().toISOString() });
       state.history = state.history.slice(-6);
       state.activity.unshift({ id: crypto.randomUUID(), text: `Auto-archived ${formatMonthLabel(monthKey)} target history`, createdAt: new Date().toISOString() });
       state.activity = state.activity.slice(0, 50);
@@ -598,6 +619,13 @@
       }
       return state.entries;
     }
+    // Entries carry the creating rep's role (assignedToRole) so the owner can see a role's
+    // combined progress without needing admin-level Supabase access to look up other users' roles.
+    function entriesForRole(role, entries = state.entries) { return entries.filter(e => e.assignedToRole === role); }
+    function roleForRepKey(repKey) {
+      const match = state.entries.find(e => repKeyFor(e) === repKey && e.assignedToRole);
+      return match ? match.assignedToRole : null;
+    }
     function getDueItems() {
       const today = new Date(); const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate()); const weekEnd = new Date(todayOnly); weekEnd.setDate(weekEnd.getDate() + 7);
       return getScopedEntries().filter(entry => entry.nextFollowUpDate || entry.lastContactDate).map(entry => {
@@ -613,10 +641,23 @@
       const parsed = new Date(`${value}T00:00:00`);
       return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric' });
     }
+    // Whichever role/target is "in view" right now, for the top stat tiles: a signed-in rep's
+    // own role target, the role of whichever rep the owner has filtered to, or (owner, no
+    // filter) the combined Sales Manager + Sales Officer total as a whole-company figure.
+    function activeTargets() {
+      if (currentUser) return currentUser.role ? state.targets[currentUser.role] : { revenue: 0, leads: 0 };
+      const role = (ownerRepFilter !== 'all' && ownerRepFilter !== '__unassigned__') ? roleForRepKey(ownerRepFilter) : null;
+      if (role) return state.targets[role];
+      return {
+        revenue: state.targets.sales_manager.revenue + state.targets.sales_officer.revenue,
+        leads: state.targets.sales_manager.leads + state.targets.sales_officer.leads
+      };
+    }
     function renderStats() {
       const statsGrid = document.getElementById('statsGrid');
       const scoped = getScopedEntries();
       const scopeLabel = currentUser ? 'you' : (ownerRepFilter !== 'all' ? 'this rep' : 'shared pipeline');
+      const targets = activeTargets();
       const currentMonth = getMonthKey(new Date());
       const wonCount = scoped.filter(item => item.status === 'won' && getMonthKey(new Date(item.wonAt || item.updatedAt || item.createdAt)) === currentMonth).length;
       const wonValue = sumWonRevenueForMonth(currentMonth, scoped);
@@ -627,22 +668,61 @@
         { label: currentUser ? 'You won this month' : 'Won this month', value: `${wonCount} ${wonCount === 1 ? 'deal' : 'deals'}`, extra: formatMoney(wonValue) },
         { label: 'Win rate', value: `${winRate}%`, extra: scopeLabel },
         { label: 'Overdue items', value: `${overdueItems}`, extra: 'needs attention now' },
-        { label: 'Lead target', value: `${state.leadTarget}`, extra: 'entries / month' },
-        { label: 'Revenue target', value: formatMoney(state.revenueTarget), extra: 'monthly team goal' },
+        { label: 'Lead target', value: `${targets.leads}`, extra: 'entries / month' },
+        { label: 'Revenue target', value: formatMoney(targets.revenue), extra: 'monthly goal' },
         { label: 'Open deals', value: `${scoped.filter(item => item.status !== 'lost' && item.status !== 'won').length}`, extra: scopeLabel }
       ];
       statsGrid.innerHTML = stats.map(stat => `<div class="card stat-card"><span>${stat.label}</span><strong>${stat.value}</strong><div class="subtle">${stat.extra}</div></div>`).join('');
     }
-    function renderProgress() {
-      const scoped = getScopedEntries();
-      const revenueActual = sumWonRevenueForMonth(getMonthKey(new Date()), scoped);
-      const revenuePercent = Math.min(100, Math.round((revenueActual / Math.max(1, Number(state.revenueTarget))) * 100));
-      document.getElementById('revenueProgress').style.width = `${revenuePercent}%`;
-      document.getElementById('revenueProgressLabel').textContent = `${formatMoney(revenueActual)} of ${formatMoney(state.revenueTarget)} reached (${revenuePercent}%)`;
-      const leadActual = countEntriesByMonth(getMonthKey(new Date()), scoped);
-      const leadPercent = Math.min(100, Math.round((leadActual / Math.max(1, Number(state.leadTarget))) * 100));
-      document.getElementById('leadProgress').style.width = `${leadPercent}%`;
-      document.getElementById('leadProgressLabel').textContent = `${leadActual} leads logged versus ${state.leadTarget} target (${leadPercent}%)`;
+    function targetCardHtml(role, entries, editable) {
+      const target = state.targets[role];
+      const monthKey = getMonthKey(new Date());
+      const revenueActual = sumWonRevenueForMonth(monthKey, entries);
+      const revenuePercent = Math.min(100, Math.round((revenueActual / Math.max(1, Number(target.revenue))) * 100));
+      const leadActual = countEntriesByMonth(monthKey, entries);
+      const leadPercent = Math.min(100, Math.round((leadActual / Math.max(1, Number(target.leads))) * 100));
+      const inputStyle = 'width:100%; margin-top:10px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--black);';
+      const revenueInput = editable ? `<input data-target-role="${role}" data-target-field="revenue" type="number" min="0" value="${target.revenue}" style="${inputStyle}" />` : '';
+      const leadInput = editable ? `<input data-target-role="${role}" data-target-field="leads" type="number" min="0" value="${target.leads}" style="${inputStyle}" />` : '';
+      return `<div class="card">
+        <div class="section-title">${ROLE_LABELS[role]} Target</div>
+        <div class="subtle">${editable ? 'Monthly revenue target in GH₵ (editable)' : 'Your monthly revenue target'}</div>
+        ${revenueInput}
+        <div class="progress-shell"><div class="progress-bar" style="width:${revenuePercent}%"></div></div>
+        <div class="subtle">${formatMoney(revenueActual)} of ${formatMoney(target.revenue)} reached (${revenuePercent}%)</div>
+        <div class="subtle" style="margin-top:12px;">${editable ? 'Monthly lead target' : 'Your monthly lead target'}</div>
+        ${leadInput}
+        <div class="progress-shell"><div class="progress-bar" style="width:${leadPercent}%"></div></div>
+        <div class="subtle">${leadActual} leads logged versus ${target.leads} target (${leadPercent}%)</div>
+      </div>`;
+    }
+    // Owner (no login) can set both role targets and sees each role's combined progress,
+    // narrowed to one person when the Pipeline "filter by rep" dropdown picks someone.
+    // A signed-in rep only ever sees their own role's card, read-only (targets are owner-managed).
+    function renderTargets() {
+      const container = document.getElementById('targetRow');
+      if (currentUser) {
+        if (!currentUser.role) {
+          container.innerHTML = `<div class="card"><div class="section-title">No Target Set</div><div class="subtle">No target has been set for your account yet — ask the business owner to assign your role (Sales Manager or Sales Officer).</div></div>`;
+          return;
+        }
+        container.innerHTML = targetCardHtml(currentUser.role, getScopedEntries(), false);
+        return;
+      }
+      const filteredRole = (ownerRepFilter !== 'all' && ownerRepFilter !== '__unassigned__') ? roleForRepKey(ownerRepFilter) : null;
+      container.innerHTML = VALID_ROLES.map(role => {
+        const entries = role === filteredRole ? getScopedEntries() : entriesForRole(role);
+        return targetCardHtml(role, entries, true);
+      }).join('');
+      container.querySelectorAll('[data-target-role]').forEach(input => {
+        input.addEventListener('change', e => {
+          const role = e.target.getAttribute('data-target-role');
+          const field = e.target.getAttribute('data-target-field');
+          const value = Number(e.target.value || 0);
+          state.targets[role][field] = Number.isFinite(value) && value >= 0 ? value : 0;
+          saveState();
+        });
+      });
     }
     function renderDueList() {
       const dueList = document.getElementById('dueList'); const dueItems = getDueItems();
@@ -786,10 +866,12 @@
         if (payload.status === 'won' && old.status !== 'won') payload.wonAt = new Date().toISOString();
         else if (payload.status === 'won') payload.wonAt = old.wonAt || old.updatedAt;
         else payload.wonAt = undefined;
-        state.entries[index] = { ...old, ...payload };
+        // assignedToRole isn't editable via the form — preserve whatever it was set to at
+        // creation, so an owner editing a rep's lead can't inadvertently blank it out.
+        state.entries[index] = { ...old, ...payload, assignedToRole: old.assignedToRole ?? null };
         state.activity.unshift({ id: crypto.randomUUID(), text: `${payload.loggedBy || 'Team'} updated ${payload.company} to ${payload.status} — ${formatMoney(payload.dealValue)}`, createdAt: new Date().toISOString() });
       } else {
-        const newEntry = { id: crypto.randomUUID(), ...payload, createdAt: new Date().toISOString(), wonAt: payload.status === 'won' ? new Date().toISOString() : undefined };
+        const newEntry = { id: crypto.randomUUID(), ...payload, assignedToRole: currentUser ? (currentUser.role || null) : null, createdAt: new Date().toISOString(), wonAt: payload.status === 'won' ? new Date().toISOString() : undefined };
         state.entries.unshift(newEntry);
         state.activity.unshift({ id: crypto.randomUUID(), text: `${payload.loggedBy || 'Team'} added ${payload.company} — ${formatMoney(payload.dealValue)}`, createdAt: new Date().toISOString() });
       }
@@ -891,14 +973,12 @@
     });
     document.getElementById('repFilter').addEventListener('change', e => { ownerRepFilter = e.target.value; render(); });
     document.getElementById('refreshBtn').addEventListener('click', () => { archiveMonthIfNeeded(); render(); showToast('Dashboard refreshed.'); });
-    document.getElementById('revenueTargetInput').addEventListener('change', e => { state.revenueTarget = Number(e.target.value || 0); saveState(); });
-    document.getElementById('leadTargetInput').addEventListener('change', e => { state.leadTarget = Number(e.target.value || 0); saveState(); });
     document.getElementById('searchInput').addEventListener('input', e => { filterText = e.target.value; renderTable(); });
     document.getElementById('statusFilter').addEventListener('change', e => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('sortField').addEventListener('change', e => { sortField = e.target.value; renderTable(); });
     document.getElementById('clearFiltersBtn').addEventListener('click', () => { filterText=''; filterStatus='all'; sortField='nextFollowUpDate'; ownerRepFilter='all'; document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = 'all'; document.getElementById('sortField').value = 'nextFollowUpDate'; render(); });
 
-    function render() { document.getElementById('revenueTargetInput').value = state.revenueTarget; document.getElementById('leadTargetInput').value = state.leadTarget; renderAuthControl(); renderRepFilterOptions(); renderStats(); renderProgress(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); updateHeaderBadges(); }
+    function render() { renderAuthControl(); renderRepFilterOptions(); renderStats(); renderTargets(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); updateHeaderBadges(); }
     initStorage();
   </script>
 </body>

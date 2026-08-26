@@ -7,7 +7,7 @@ A single-page sales and lead pipeline tracker built for the Dekells/GRiT sales a
 - **Prospect/client pipeline** — add, edit, and soft-delete entries with company, contact person, phone, email, deal value, status (Contacted / Quoted / Follow-up due / Won / Lost), notes, last-contact date, next-follow-up date, and who logged the entry.
 - **Search, filter, and sort** — free-text search across company/contact/phone/email, filter by status, and sort by next follow-up date, company, status, or deal value.
 - **Due-today/this-week list** — automatically surfaces entries that are overdue or due within the next 7 days, flagged visually (red for overdue, amber for due soon).
-- **Monthly targets with progress bars** — editable shared revenue target (GH₵) and lead-count target, each with a live progress bar computed from the current month's actual won revenue / logged leads.
+- **Monthly targets with progress bars, per role** — separate revenue and lead-count targets for the Sales Manager role and the Sales Officer role, each with its own live progress bar computed from the current month's actual won revenue / logged leads for that role.
 - **Stat tiles** — deals won this month, win rate, overdue count, lead target, revenue target, and open-deal count.
 - **Trash with undo** — deleting an entry moves it to a trash list (last 20) instead of destroying it, with a one-click restore.
 - **Activity feed** — a running, timestamped log (last 50 entries) of adds/edits/deletes/restores, attributed to whoever is logged in the entry's "Logged By" field.
@@ -35,10 +35,14 @@ There are no npm scripts, no tests, and no CI configuration in this project.
 There's no signup/invite screen — a sales rep account is created manually by the business owner:
 
 1. In the Supabase dashboard, go to **Authentication → Users → Add user**, and create an email/password account for the rep.
-2. Set the user's **metadata** to `{ "full_name": "Their Name" }` so the dashboard shows a real name instead of their raw email in "Logged By" and the activity feed.
+2. Set the user's **metadata** to `{ "full_name": "Their Name", "role": "sales_manager" }` or `{ "full_name": "Their Name", "role": "sales_officer" }` — the `role` value must be exactly `sales_manager` or `sales_officer` (any other value, or leaving it out, means the app treats them as having no target). This is also what decides which of the two target cards their progress counts toward.
 3. Give the rep the email/password to sign in with via the "Sales Rep Sign In" button in the dashboard's top-right.
 
 This scales to any number of future hires — just repeat the steps above per person, no app changes needed. Note this is soft, client-side scoping for individual tracking, not real data isolation: the dashboard's Supabase table has no row-level security, so the public anon key can still read/write the whole shared pipeline regardless of who (if anyone) is signed in — exactly as it already could before rep login existed.
+
+### Role-based revenue and lead targets
+
+The owner (no login) sets two separate monthly targets on the Dashboard page — one "Sales Manager Target" card and one "Sales Officer Target" card, each with its own revenue and lead-count input. A signed-in rep's progress counts toward whichever target matches their `role` metadata (see above); if more than one person shares a role, the owner's default view shows that role's combined progress, and narrowing the Pipeline page's "filter by rep" dropdown to one person shows that person's own progress against their role's target instead. A rep with no `role` set sees a "No Target Set" message instead of a broken progress bar.
 
 ## Project structure
 
