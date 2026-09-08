@@ -215,6 +215,9 @@
           <button id="trashBtn" class="icon-btn" type="button" title="Trash" aria-haspopup="true" aria-expanded="false">
             🗑<span id="trashDot" class="badge-dot" style="display:none"></span>
           </button>
+          <button id="exportBtn" class="icon-btn" type="button" title="Export Backup (download all data as JSON)">
+            💾
+          </button>
         </div>
       </header>
 
@@ -911,6 +914,23 @@
       saveState(); showToast('Entry restored from trash.');
     }
     function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2400); }
+
+    // Downloads the full current state (entries, trash, history, activity, targets) as a JSON
+    // file — a manual safety net independent of Supabase, since saves are whole-document
+    // overwrites with no built-in version history.
+    function exportBackup() {
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `marketing-dashboard-backup-${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast('Backup downloaded.');
+    }
     function buildWhatsAppLink(item) { const text = encodeURIComponent(`Hi ${item.contactPerson},\n\nJust checking in on ${item.company}. Please review our latest follow-up and next steps.\n\nBest,\n${item.loggedBy || 'Team'}`); return `https://wa.me/${(item.phone || '').replace(/\D/g, '')}?text=${text}`; }
     function buildEmailLink(item) { const subject = encodeURIComponent(`Follow-up for ${item.company}`); const body = encodeURIComponent(`Hi ${item.contactPerson},\n\nI wanted to follow up on ${item.company}.\n\nBest regards,\n${item.loggedBy || 'Team'}`); return `mailto:${item.email || ''}?subject=${subject}&body=${body}`; }
 
@@ -940,6 +960,7 @@
       document.getElementById('trashBackdrop').classList.remove('open');
       document.getElementById('trashBtn').setAttribute('aria-expanded', 'false');
     }
+    document.getElementById('exportBtn').addEventListener('click', exportBackup);
     document.getElementById('trashBtn').addEventListener('click', openTrashPanel);
     document.getElementById('closeTrashBtn').addEventListener('click', closeTrashPanel);
     document.getElementById('trashBackdrop').addEventListener('click', closeTrashPanel);
