@@ -216,6 +216,9 @@
           <button id="trashBtn" class="icon-btn" type="button" title="Trash" aria-haspopup="true" aria-expanded="false">
             🗑<span id="trashDot" class="badge-dot" style="display:none"></span>
           </button>
+          <button id="teamBtn" class="icon-btn" type="button" title="Team & Roles" aria-haspopup="true" aria-expanded="false">
+            👥<span id="teamDot" class="badge-dot" style="display:none"></span>
+          </button>
           <button id="exportBtn" class="icon-btn" type="button" title="Export Backup (download all data as JSON)">
             💾
           </button>
@@ -302,6 +305,19 @@
     </div>
   </div>
 
+  <!-- Team & Roles slide-over (owner-only) -->
+  <div id="teamBackdrop" class="slide-over-backdrop"></div>
+  <div id="teamPanel" class="slide-over" role="dialog" aria-modal="true" aria-labelledby="teamPanelTitle">
+    <div class="slide-over-head">
+      <h3 id="teamPanelTitle">Team & Roles</h3>
+      <button id="closeTeamBtn" class="secondary" type="button">Close</button>
+    </div>
+    <div class="slide-over-body">
+      <div class="subtle" style="margin-bottom:12px;">Assign each signed-in rep a role so their leads count toward the right monthly target. A rep appears here once they've signed in and logged at least one lead.</div>
+      <div id="teamList" class="due-list"></div>
+    </div>
+  </div>
+
   <div id="entryModal" class="modal-backdrop">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-head">
@@ -375,7 +391,8 @@
         { id: crypto.randomUUID(), text: 'Sylvester moved Dekells Materials to Follow-up due', createdAt: new Date().toISOString() }
       ],
       trash: [],
-      history: []
+      history: [],
+      repRoles: {}
     };
 
     const VALID_STATUSES = ['contacted', 'quoted', 'follow-up-due', 'won', 'lost'];
@@ -463,9 +480,25 @@
             }))
           : [],
         trash: Array.isArray(raw.trash) ? raw.trash.map(sanitizeEntry).filter(Boolean).slice(0, 20) : [],
-        history: Array.isArray(raw.history) ? raw.history.filter(item => item && typeof item.monthKey === 'string') : []
+        history: Array.isArray(raw.history) ? raw.history.filter(item => item && typeof item.monthKey === 'string') : [],
+        repRoles: sanitizeRepRoles(raw.repRoles)
       };
     }
+
+    // Owner-assigned rep -> role map, keyed by repKeyFor() (assignedToId, or loggedBy for
+    // legacy/manual entries). This is the single source of truth for role attribution —
+    // it supersedes both Supabase Auth's user_metadata.role (which would need a service-role
+    // key to set from the client, a security no-go with this app's public anon key) and the
+    // assignedToRole snapshotted onto an entry at creation time. Because lookups happen live
+    // at render time, assigning a role here retroactively fixes counts for leads already logged.
+    function sanitizeRepRoles(raw) {
+      const out = {};
+      if (raw && typeof raw === 'object') {
+        Object.entries(raw).forEach(([key, role]) => { if (key && VALID_ROLES.includes(role)) out[key] = role; });
+      }
+      return out;
+    }
+    function roleForRep(repKey) { return (repKey && state.repRoles[repKey]) || null; }
 
     function loadState() {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -483,12 +516,13 @@
 
     async function refreshCurrentUser(session) {
       const user = session?.user || null;
-      const rawRole = user?.user_metadata?.role;
+      // Role is looked up live from state.repRoles (via roleForRep) wherever it's needed,
+      // not cached here — so an owner assigning a role takes effect immediately, without
+      // requiring the rep to sign out/in again.
       currentUser = user ? {
         id: user.id,
         email: user.email,
-        displayName: user.user_metadata?.full_name?.trim() || user.email,
-        role: VALID_ROLES.includes(rawRole) ? rawRole : null
+        displayName: user.user_metadata?.full_name?.trim() || user.email
       } : null;
     }
 
@@ -624,13 +658,11 @@
       }
       return state.entries;
     }
-    // Entries carry the creating rep's role (assignedToRole) so the owner can see a role's
-    // combined progress without needing admin-level Supabase access to look up other users' roles.
-    function entriesForRole(role, entries = state.entries) { return entries.filter(e => e.assignedToRole === role); }
-    function roleForRepKey(repKey) {
-      const match = state.entries.find(e => repKeyFor(e) === repKey && e.assignedToRole);
-      return match ? match.assignedToRole : null;
-    }
+    // Role is resolved live via roleForRep(repKeyFor(entry)) rather than a value snapshotted
+    // onto the entry, so assigning/changing a rep's role in the Team panel retroactively
+    // corrects which target an already-logged lead counts toward.
+    function entriesForRole(role, entries = state.entries) { return entries.filter(e => roleForRep(repKeyFor(e)) === role); }
+    function roleForRepKey(repKey) { return roleForRep(repKey); }
     function getDueItems() {
       const today = new Date(); const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate()); const weekEnd = new Date(todayOnly); weekEnd.setDate(weekEnd.getDate() + 7);
       return getScopedEntries().filter(entry => entry.nextFollowUpDate || entry.lastContactDate).map(entry => {
@@ -651,7 +683,7 @@
     // own role target, the role of whichever rep the owner has filtered to, or (owner, no
     // filter) the combined Sales Manager + Sales Officer total as a whole-company figure.
     function activeTargets() {
-      if (currentUser) return currentUser.role ? state.targets[currentUser.role] : { revenue: 0, leads: 0 };
+      if (currentUser) { const role = roleForRep(currentUser.id); return role ? state.targets[role] : { revenue: 0, leads: 0 }; }
       const role = (ownerRepFilter !== 'all' && ownerRepFilter !== '__unassigned__') ? roleForRepKey(ownerRepFilter) : null;
       if (role) return state.targets[role];
       return {
@@ -708,11 +740,12 @@
     function renderTargets() {
       const container = document.getElementById('targetRow');
       if (currentUser) {
-        if (!currentUser.role) {
-          container.innerHTML = `<div class="card"><div class="section-title">No Target Set</div><div class="subtle">No target has been set for your account yet — ask the business owner to assign your role (Sales Manager or Sales Officer).</div></div>`;
+        const role = roleForRep(currentUser.id);
+        if (!role) {
+          container.innerHTML = `<div class="card"><div class="section-title">No Target Set</div><div class="subtle">No target has been set for your account yet — ask the business owner to assign your role (Sales Manager or Sales Officer) in the Team panel.</div></div>`;
           return;
         }
-        container.innerHTML = targetCardHtml(currentUser.role, getScopedEntries(), false);
+        container.innerHTML = targetCardHtml(role, getScopedEntries(), false);
         return;
       }
       const filteredRole = (ownerRepFilter !== 'all' && ownerRepFilter !== '__unassigned__') ? roleForRepKey(ownerRepFilter) : null;
@@ -749,6 +782,13 @@
       const container = document.getElementById('historyList');
       container.innerHTML = state.history.map(item => `<div class="history-item"><strong>${item.monthLabel}</strong><div class="small">Target: ${formatMoney(item.revenueTarget)} · Actual: ${formatMoney(item.revenueActual)} · Leads: ${item.leadActual}/${item.leadTarget}</div></div>`).join('');
     }
+    // Every rep who has logged at least one entry, keyed the same way as repKeyFor(). Shared
+    // by the rep filter dropdown and the Team & Roles admin panel.
+    function getRepLabels() {
+      const labels = new Map();
+      state.entries.forEach(entry => { const key = repKeyFor(entry); if (key && !labels.has(key)) labels.set(key, entry.loggedBy || key); });
+      return labels;
+    }
     // Populated dynamically from whichever reps actually have entries, so it scales to
     // new hires automatically with no code change. Owner-only — reps never see it, since
     // decision was "only their own leads, always" with no team-view toggle.
@@ -756,12 +796,41 @@
       const select = document.getElementById('repFilter');
       if (currentUser) { select.style.display = 'none'; return; }
       select.style.display = '';
-      const labels = new Map();
-      state.entries.forEach(entry => { const key = repKeyFor(entry); if (key && !labels.has(key)) labels.set(key, entry.loggedBy || key); });
+      const labels = getRepLabels();
       select.innerHTML = `<option value="all">All reps</option>` +
         Array.from(labels.entries()).map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join('') +
         `<option value="__unassigned__">Unassigned / legacy</option>`;
       select.value = ownerRepFilter;
+    }
+    // Owner-only admin panel to assign each rep a role, so their leads count toward the
+    // right monthly target. See sanitizeRepRoles/roleForRep above for why this replaced
+    // Supabase Auth user_metadata as the source of truth.
+    function renderTeamPanel() {
+      const teamBtn = document.getElementById('teamBtn');
+      teamBtn.style.display = currentUser ? 'none' : '';
+      const list = document.getElementById('teamList');
+      const labels = getRepLabels();
+      if (!labels.size) {
+        list.innerHTML = '<div class="due-item">No reps have logged a lead yet. Once someone signs in and logs their first lead, they\'ll appear here to assign a role.</div>';
+        return;
+      }
+      list.innerHTML = Array.from(labels.entries()).map(([key, label]) => {
+        const role = roleForRep(key) || '';
+        const options = [`<option value="">Unassigned</option>`]
+          .concat(VALID_ROLES.map(r => `<option value="${r}" ${role === r ? 'selected' : ''}>${ROLE_LABELS[r]}</option>`));
+        return `<div class="due-item"><strong>${escapeHtml(label)}</strong>
+          <select data-rep-role-key="${escapeHtml(key)}" style="width:100%; margin-top:8px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--black);">${options.join('')}</select>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('[data-rep-role-key]').forEach(select => {
+        select.addEventListener('change', e => {
+          const key = e.target.getAttribute('data-rep-role-key');
+          const value = e.target.value;
+          if (VALID_ROLES.includes(value)) state.repRoles[key] = value; else delete state.repRoles[key];
+          saveState();
+          showToast(`Role updated for ${labels.get(key)}.`);
+        });
+      });
     }
     function renderAuthControl() {
       const container = document.getElementById('authControl');
@@ -886,7 +955,7 @@
         state.entries[index] = { ...old, ...payload, assignedToRole: old.assignedToRole ?? null };
         state.activity.unshift({ id: crypto.randomUUID(), text: `${payload.loggedBy || 'Team'} updated ${payload.company} to ${payload.status} — ${formatMoney(payload.dealValue)}`, createdAt: new Date().toISOString() });
       } else {
-        const newEntry = { id: crypto.randomUUID(), ...payload, assignedToRole: currentUser ? (currentUser.role || null) : null, createdAt: new Date().toISOString(), wonAt: payload.status === 'won' ? new Date().toISOString() : undefined };
+        const newEntry = { id: crypto.randomUUID(), ...payload, assignedToRole: currentUser ? roleForRep(currentUser.id) : null, createdAt: new Date().toISOString(), wonAt: payload.status === 'won' ? new Date().toISOString() : undefined };
         state.entries.unshift(newEntry);
         state.activity.unshift({ id: crypto.randomUUID(), text: `${payload.loggedBy || 'Team'} added ${payload.company} — ${formatMoney(payload.dealValue)}`, createdAt: new Date().toISOString() });
       }
@@ -968,6 +1037,22 @@
     document.getElementById('trashBackdrop').addEventListener('click', closeTrashPanel);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTrashPanel(); });
 
+    // ── TEAM & ROLES SLIDE-OVER (icon-triggered, owner-only) ──
+    function openTeamPanel() {
+      document.getElementById('teamPanel').classList.add('open');
+      document.getElementById('teamBackdrop').classList.add('open');
+      document.getElementById('teamBtn').setAttribute('aria-expanded', 'true');
+    }
+    function closeTeamPanel() {
+      document.getElementById('teamPanel').classList.remove('open');
+      document.getElementById('teamBackdrop').classList.remove('open');
+      document.getElementById('teamBtn').setAttribute('aria-expanded', 'false');
+    }
+    document.getElementById('teamBtn').addEventListener('click', openTeamPanel);
+    document.getElementById('closeTeamBtn').addEventListener('click', closeTeamPanel);
+    document.getElementById('teamBackdrop').addEventListener('click', closeTeamPanel);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTeamPanel(); });
+
     // ── ACTIVITY DROPDOWN (icon-triggered, per request — not shown by default) ──
     function toggleActivityDropdown(forceOpen) {
       const panel = document.getElementById('activityDropdown');
@@ -988,6 +1073,8 @@
     function updateHeaderBadges() {
       document.getElementById('trashDot').style.display = state.trash.length ? 'block' : 'none';
       document.getElementById('activityDot').style.display = state.activity.length ? 'block' : 'none';
+      const needsRole = Array.from(getRepLabels().keys()).some(key => !roleForRep(key));
+      document.getElementById('teamDot').style.display = (!currentUser && needsRole) ? 'block' : 'none';
     }
 
     document.getElementById('newEntryBtn').addEventListener('click', () => openModal());
@@ -1011,7 +1098,7 @@
     document.getElementById('sortField').addEventListener('change', e => { sortField = e.target.value; renderTable(); });
     document.getElementById('clearFiltersBtn').addEventListener('click', () => { filterText=''; filterStatus='all'; sortField='nextFollowUpDate'; ownerRepFilter='all'; document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = 'all'; document.getElementById('sortField').value = 'nextFollowUpDate'; render(); });
 
-    function render() { renderAuthControl(); renderRepFilterOptions(); renderStats(); renderTargets(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); updateHeaderBadges(); }
+    function render() { renderAuthControl(); renderRepFilterOptions(); renderStats(); renderTargets(); renderDueList(); renderTrash(); renderActivity(); renderHistory(); renderTable(); renderTeamPanel(); updateHeaderBadges(); }
     initStorage();
   </script>
 </body>
