@@ -96,6 +96,7 @@
     .due-list, .history-list, .trash-list, .activity-list { display: grid; gap: 10px; }
     .due-item, .trash-item, .activity-item, .history-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .flag-overdue { border-left: 4px solid var(--red); }
+    .flag-today { border-left: 4px solid var(--orange); }
     .flag-soon { border-left: 4px solid var(--yellow); }
 
     .toolbar { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
@@ -635,9 +636,10 @@
       return getScopedEntries().filter(entry => entry.nextFollowUpDate || entry.lastContactDate).map(entry => {
         const next = entry.nextFollowUpDate ? new Date(`${entry.nextFollowUpDate}T00:00:00`) : null;
         const overdue = next && next < todayOnly;
-        const soon = next && next >= todayOnly && next <= weekEnd;
-        return { ...entry, overdue, soon };
-      }).filter(entry => entry.overdue || entry.soon).sort((a,b)=>(a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || ''));
+        const dueToday = next && next.getTime() === todayOnly.getTime();
+        const soon = next && next > todayOnly && next <= weekEnd;
+        return { ...entry, overdue, dueToday, soon };
+      }).filter(entry => entry.overdue || entry.dueToday || entry.soon).sort((a,b)=>(a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || ''));
     }
     function formatMoney(n) { return new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 0 }).format(Number(n || 0)); }
     function formatDate(value) {
@@ -731,7 +733,7 @@
     function renderDueList() {
       const dueList = document.getElementById('dueList'); const dueItems = getDueItems();
       if (!dueItems.length) { dueList.innerHTML = '<div class="due-item">No follow-up or renewal items are due right now.</div>'; return; }
-      dueList.innerHTML = dueItems.map(item => `<div class="due-item ${item.overdue ? 'flag-overdue' : 'flag-soon'}"><strong>${escapeHtml(item.company)}</strong><br /><span class="small">${escapeHtml(item.contactPerson)} · ${escapeHtml(item.status)} · ${escapeHtml(formatDate(item.nextFollowUpDate || item.lastContactDate))}</span><br /><span class="small">${item.overdue ? 'Overdue' : 'Due soon'} · ${formatMoney(item.dealValue)}</span></div>`).join('');
+      dueList.innerHTML = dueItems.map(item => { const flagClass = item.overdue ? 'flag-overdue' : item.dueToday ? 'flag-today' : 'flag-soon'; const flagLabel = item.overdue ? 'Overdue' : item.dueToday ? 'Due Today' : 'Due soon'; return `<div class="due-item ${flagClass}"><strong>${escapeHtml(item.company)}</strong><br /><span class="small">${escapeHtml(item.contactPerson)} · ${escapeHtml(item.status)} · ${escapeHtml(formatDate(item.nextFollowUpDate || item.lastContactDate))}</span><br /><span class="small">${flagLabel} · ${formatMoney(item.dealValue)}</span></div>`; }).join('');
     }
     function renderTrash() {
       const trashList = document.getElementById('trashList');
