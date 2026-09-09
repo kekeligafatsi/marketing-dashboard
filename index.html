@@ -88,6 +88,9 @@
     .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
     .stat-card span { display: block; color: var(--grey); font-size: 0.82rem; margin-bottom: 8px; }
     .stat-card strong { display: block; font-size: 1.3rem; margin-bottom: 6px; color: var(--navy); }
+    .stat-card { cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); }
+    .stat-card:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
     .target-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
     .progress-shell { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; height: 12px; margin-top: 10px; }
     .progress-bar { height: 100%; border-radius: inherit; background: var(--orange); }
@@ -703,14 +706,14 @@
       const winRate = totalEntries ? Math.round((scoped.filter(item => item.status === 'won').length / totalEntries) * 100) : 0;
       const overdueItems = getDueItems().filter(item => item.overdue).length;
       const stats = [
-        { label: currentUser ? 'You won this month' : 'Won this month', value: `${wonCount} ${wonCount === 1 ? 'deal' : 'deals'}`, extra: formatMoney(wonValue) },
-        { label: 'Win rate', value: `${winRate}%`, extra: scopeLabel },
-        { label: 'Overdue items', value: `${overdueItems}`, extra: 'needs attention now' },
-        { label: 'Lead target', value: `${targets.leads}`, extra: 'entries / month' },
-        { label: 'Revenue target', value: formatMoney(targets.revenue), extra: 'monthly goal' },
-        { label: 'Open deals', value: `${scoped.filter(item => item.status !== 'lost' && item.status !== 'won').length}`, extra: scopeLabel }
+        { label: currentUser ? 'You won this month' : 'Won this month', value: `${wonCount} ${wonCount === 1 ? 'deal' : 'deals'}`, extra: formatMoney(wonValue), action: 'won' },
+        { label: 'Win rate', value: `${winRate}%`, extra: scopeLabel, action: 'winrate' },
+        { label: 'Overdue items', value: `${overdueItems}`, extra: 'needs attention now', action: 'overdue' },
+        { label: 'Lead target', value: `${targets.leads}`, extra: 'entries / month', action: 'leadtarget' },
+        { label: 'Revenue target', value: formatMoney(targets.revenue), extra: 'monthly goal', action: 'revenuetarget' },
+        { label: 'Open deals', value: `${scoped.filter(item => item.status !== 'lost' && item.status !== 'won').length}`, extra: scopeLabel, action: 'open' }
       ];
-      statsGrid.innerHTML = stats.map(stat => `<div class="card stat-card"><span>${stat.label}</span><strong>${stat.value}</strong><div class="subtle">${stat.extra}</div></div>`).join('');
+      statsGrid.innerHTML = stats.map(stat => `<div class="card stat-card" data-stat-action="${stat.action}" role="button" tabindex="0" aria-label="${stat.label}: ${stat.value}"><span>${stat.label}</span><strong>${stat.value}</strong><div class="subtle">${stat.extra}</div></div>`).join('');
     }
     function targetCardHtml(role, entries, editable) {
       const target = state.targets[role];
@@ -1019,6 +1022,35 @@
       if (meta) { document.getElementById('pageTitle').textContent = meta.title; document.getElementById('pageSubtitle').textContent = meta.subtitle; }
     }
     document.querySelectorAll('.side-btn').forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.page)));
+
+    // ── STAT CARDS (clickable) ──────────────────────────────────────────────
+    function goToPipeline(status) {
+      switchPage('pipeline');
+      filterStatus = status;
+      filterText = '';
+      document.getElementById('statusFilter').value = status;
+      document.getElementById('searchInput').value = '';
+      renderTable();
+    }
+    function scrollToSection(elId) {
+      switchPage('dashboard');
+      requestAnimationFrame(() => document.getElementById(elId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    function handleStatAction(action) {
+      if (action === 'won') goToPipeline('won');
+      else if (action === 'winrate') goToPipeline('all');
+      else if (action === 'open') goToPipeline('all');
+      else if (action === 'overdue') scrollToSection('dueList');
+      else if (action === 'leadtarget' || action === 'revenuetarget') scrollToSection('targetRow');
+    }
+    document.getElementById('statsGrid').addEventListener('click', e => {
+      const card = e.target.closest('[data-stat-action]');
+      if (card) handleStatAction(card.dataset.statAction);
+    });
+    document.getElementById('statsGrid').addEventListener('keydown', e => {
+      const card = e.target.closest('[data-stat-action]');
+      if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleStatAction(card.dataset.statAction); }
+    });
 
     // ── TRASH SLIDE-OVER (icon-triggered, per request — not shown by default) ──
     function openTrashPanel() {
