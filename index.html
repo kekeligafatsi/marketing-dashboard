@@ -586,22 +586,25 @@
     async function persistToSupabase() {
       if (!supabaseConfigured || !supabaseClient) return;
       try {
-        if (lastKnownRemoteUpdatedAt) {
-          const { data: current, error: checkError } = await supabaseClient.from('dashboard_state').select('updated_at').eq('key', 'marketing-dashboard').maybeSingle();
-          if (checkError) throw checkError;
-          if (current && current.updated_at && current.updated_at !== lastKnownRemoteUpdatedAt) {
-            const { data: latest, error: latestError } = await supabaseClient.from('dashboard_state').select('value, updated_at').eq('key', 'marketing-dashboard').maybeSingle();
-            if (latestError) throw latestError;
-            if (latest?.value) {
-              state = sanitizeState(latest.value);
-              lastKnownRemoteUpdatedAt = latest.updated_at || null;
-              render();
-              showToast('Someone else updated the dashboard just now — reloaded their changes. Please redo your edit.');
-            }
-            lastSyncOk = true;
-            updateSyncBanner();
-            return;
+        // Always re-check the remote row before writing — even when lastKnownRemoteUpdatedAt
+        // is null (this tab never successfully loaded remote state this session, e.g. the
+        // initial load's fetch failed). Skipping this check in that case used to fall straight
+        // through to an unconditional upsert of a stale/incomplete local snapshot, silently
+        // wiping out every edit anyone else made in the meantime (the whole document is one row).
+        const { data: current, error: checkError } = await supabaseClient.from('dashboard_state').select('updated_at').eq('key', 'marketing-dashboard').maybeSingle();
+        if (checkError) throw checkError;
+        if (current && current.updated_at && current.updated_at !== lastKnownRemoteUpdatedAt) {
+          const { data: latest, error: latestError } = await supabaseClient.from('dashboard_state').select('value, updated_at').eq('key', 'marketing-dashboard').maybeSingle();
+          if (latestError) throw latestError;
+          if (latest?.value) {
+            state = sanitizeState(latest.value);
+            lastKnownRemoteUpdatedAt = latest.updated_at || null;
+            render();
+            showToast('Someone else updated the dashboard just now — reloaded their changes. Please redo your edit.');
           }
+          lastSyncOk = true;
+          updateSyncBanner();
+          return;
         }
         const nowIso = new Date().toISOString();
         const payload = { key: 'marketing-dashboard', value: state, updated_at: nowIso };
