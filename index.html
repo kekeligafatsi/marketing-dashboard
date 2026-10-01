@@ -793,16 +793,31 @@
       const container = document.getElementById('activityFeed');
       container.innerHTML = state.activity.slice(0, 50).map(item => `<div class="activity-item"><div>${escapeHtml(item.text)}</div><div class="small">${escapeHtml(new Date(item.createdAt).toLocaleString())}</div></div>`).join('');
     }
+    // The pipeline went live in September 2026 — earlier history rows are pre-launch placeholders.
+    const HISTORY_START_MONTH = '2026-09';
+    const STATUS_LABELS = { contacted: 'Contacted', quoted: 'Quoted', 'follow-up-due': 'Follow-up due', won: 'Won', lost: 'Lost' };
     function renderHistory() {
       const container = document.getElementById('historyList');
       const currentMonth = getMonthKey(new Date());
-      container.innerHTML = state.history.map(item => {
+      const repLabels = getRepLabels();
+      const percent = (actual, target) => Math.round((Number(actual) || 0) / Math.max(1, Number(target) || 0) * 100);
+      container.innerHTML = state.history.filter(item => item.monthKey >= HISTORY_START_MONTH).slice().reverse().map(item => {
         // The month still in progress shows live actuals rather than its (not yet finalized) stored zeros.
         const live = !item.finalized && item.monthKey === currentMonth;
         const revenueActual = live ? sumWonRevenueForMonth(item.monthKey) : item.revenueActual;
         const leadActual = live ? countEntriesByMonth(item.monthKey) : item.leadActual;
-        return `<div class="history-item"><strong>${escapeHtml(formatMonthLabel(item.monthKey))}${live ? ' (in progress)' : ''}</strong><div class="small">Target: ${formatMoney(item.revenueTarget)} · Actual: ${formatMoney(revenueActual)} · Leads: ${Number(leadActual) || 0}/${Number(item.leadTarget) || 0}</div></div>`;
-      }).join('');
+        // Rep/status splits are always computed live: status reflects where that month's leads stand today.
+        const monthEntries = state.entries.filter(e => getMonthKey(new Date(e.createdAt)) === item.monthKey);
+        const wonCount = state.entries.filter(e => e.status === 'won' && getMonthKey(new Date(e.wonAt || e.updatedAt || e.createdAt)) === item.monthKey).length;
+        const byRep = new Map();
+        monthEntries.forEach(e => { const label = repLabels.get(repKeyFor(e)) || 'Unassigned'; byRep.set(label, (byRep.get(label) || 0) + 1); });
+        const repText = Array.from(byRep.entries()).sort((a, b) => b[1] - a[1]).map(([label, n]) => `${escapeHtml(label)}: ${n}`).join(' · ') || 'No leads logged';
+        const statusText = Object.keys(STATUS_LABELS).map(s => [s, monthEntries.filter(e => e.status === s).length]).filter(([, n]) => n).map(([s, n]) => `${STATUS_LABELS[s]}: ${n}`).join(' · ') || '—';
+        return `<div class="history-item"><strong>${escapeHtml(formatMonthLabel(item.monthKey))}${live ? ' (in progress)' : ''}</strong>
+          <div class="small">Leads: ${Number(leadActual) || 0} / ${Number(item.leadTarget) || 0} (${percent(leadActual, item.leadTarget)}%) · Revenue: ${formatMoney(revenueActual)} / ${formatMoney(item.revenueTarget)} (${percent(revenueActual, item.revenueTarget)}%) · Deals won: ${wonCount}</div>
+          <div class="small">By rep — ${repText}</div>
+          <div class="small">Lead status now — ${statusText}</div></div>`;
+      }).join('') || '<div class="subtle">No history yet.</div>';
     }
     // Every rep who has logged at least one entry, keyed the same way as repKeyFor(). Shared
     // by the rep filter dropdown and the Team & Roles admin panel.
