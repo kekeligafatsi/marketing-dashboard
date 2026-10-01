@@ -42,7 +42,6 @@ Since everything lives in one file, this is the real architecture map: the file'
 | Pipeline card (`#searchInput`, `#statusFilter`, `#sortField`, `#clearFiltersBtn`, `#pipelineTableBody`) | Searchable/filterable/sortable table of all entries, with Edit/Delete/WhatsApp/Email actions per row | `renderTable()` |
 | `#activityFeed` | Chronological log of the last 50 add/edit/delete/restore actions | `renderActivity()` |
 | `#historyList` | Archived month-over-month target vs. actual snapshots (last 6 months) | `renderHistory()` / `archiveMonthIfNeeded()` |
-| Quick Notes card | Static explanatory text (no-login, live-shared pipeline note) | Static markup |
 | `#entryModal` / `#entryForm` | Add/Edit Prospect modal form (company, contact, phone, email, deal value, status, dates, logged-by, notes) | `openModal()` / `addOrUpdateEntry()` |
 | `#toast` | Ephemeral bottom-right notification (e.g. "Entry saved successfully.") | `showToast()` |
 
