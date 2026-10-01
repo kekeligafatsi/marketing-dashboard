@@ -41,7 +41,7 @@ Since everything lives in one file, this is the real architecture map: the file'
 | `#trashList` | Soft-deleted entries with an Undo button each | `renderTrash()` / `undoTrash()` |
 | Pipeline card (`#searchInput`, `#statusFilter`, `#sortField`, `#clearFiltersBtn`, `#pipelineTableBody`) | Searchable/filterable/sortable table of all entries, with Edit/Delete/WhatsApp/Email actions per row | `renderTable()` |
 | `#activityFeed` | Chronological log of the last 50 add/edit/delete/restore actions | `renderActivity()` |
-| `#historyList` | Archived month-over-month target vs. actual snapshots (last 6 months) | `renderHistory()` / `archiveMonthIfNeeded()` |
+| `#monthlyStats` (Dashboard) | One card per month from Sept 2026: leads / revenue vs the month's target, deals won, per-rep and current lead-status split (reps see only their own) | `renderHistory()` / `archiveMonthIfNeeded()` |
 | `#entryModal` / `#entryForm` | Add/Edit Prospect modal form (company, contact, phone, email, deal value, status, dates, logged-by, notes) | `openModal()` / `addOrUpdateEntry()` |
 | `#toast` | Ephemeral bottom-right notification (e.g. "Entry saved successfully.") | `showToast()` |
 
@@ -74,7 +74,7 @@ Since everything lives in one file, this is the real architecture map: the file'
 
 **`ActivityItem`**: `{ id, text, createdAt }` — capped at 50, newest first.
 
-**`HistoryItem`**: `{ monthKey, monthLabel, revenueTarget, revenueActual, leadTarget, leadActual, archivedAt }` — capped at 6, one per month, appended by `archiveMonthIfNeeded()`.
+**`HistoryItem`**: `{ monthKey, monthLabel, revenueTarget, revenueActual, leadTarget, leadActual, archivedAt, finalized, finalizedAt }` — capped at 6, one per month. Created by `archiveMonthIfNeeded()` on the month's first save (targets snapshotted then); actuals are filled in and `finalized` set once the month has ended.
 
 **Function groups** (no separate files — all in the one `<script>` block):
 - **Persistence / sync** — `loadState`, `saveState`, `initStorage`, `persistToSupabase`, `updateSyncBanner`: read/write `localStorage`, and optionally read/write the Supabase `dashboard_state` table with an optimistic-concurrency check against `updated_at`.

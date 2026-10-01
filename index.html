@@ -96,8 +96,15 @@
     .progress-bar { height: 100%; border-radius: inherit; background: var(--orange); }
     .subtle { color: var(--grey); font-size: 0.85rem; }
     .section-title { margin: 0 0 12px; font-size: 1rem; color: var(--navy); font-weight: 700; }
-    .due-list, .history-list, .trash-list, .activity-list { display: grid; gap: 10px; }
-    .due-item, .trash-item, .activity-item, .history-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+    .month-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .month-card .month-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+    .month-card .month-head strong { color: var(--navy); font-size: 1.05rem; }
+    .month-card .month-metric { margin-top: 12px; }
+    .month-card .month-metric .progress-shell { margin: 6px 0 4px; }
+    .month-card .month-split { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .month-card .pill { display: inline-block; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--grey); }
+    .due-list, .trash-list, .activity-list { display: grid; gap: 10px; }
+    .due-item, .trash-item, .activity-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .flag-overdue { border-left: 4px solid var(--red); }
     .flag-today { border-left: 4px solid var(--orange); }
     .flag-soon { border-left: 4px solid var(--yellow); }
@@ -196,7 +203,6 @@
       </div>
       <button class="side-btn active" data-page="dashboard">📊 Dashboard</button>
       <button class="side-btn" data-page="pipeline">📋 Pipeline</button>
-      <button class="side-btn" data-page="history">📈 History</button>
     </nav>
 
     <div class="main">
@@ -245,6 +251,9 @@
 
           <section class="target-row" id="targetRow"></section>
 
+          <div class="section-title">Monthly Stats</div>
+          <section class="month-grid" id="monthlyStats"></section>
+
           <section class="card">
             <div class="section-title">Due Today / This Week</div>
             <div id="dueList" class="due-list"></div>
@@ -278,13 +287,6 @@
               <tbody id="pipelineTableBody"></tbody>
             </table>
           </div>
-        </div>
-
-        <div class="page" id="page-history">
-          <section class="card">
-            <div class="section-title">Month-over-Month History</div>
-            <div id="historyList" class="history-list"></div>
-          </section>
         </div>
       </div>
 
@@ -796,28 +798,43 @@
     // The pipeline went live in September 2026 — earlier history rows are pre-launch placeholders.
     const HISTORY_START_MONTH = '2026-09';
     const STATUS_LABELS = { contacted: 'Contacted', quoted: 'Quoted', 'follow-up-due': 'Follow-up due', won: 'Won', lost: 'Lost' };
+    // One dashboard card per month (newest first). The owner sees team totals against the
+    // combined target snapshotted for that month, plus a per-rep split; a signed-in rep sees
+    // only their own leads/wins, no targets or teammates — same scoping as the rest of the dashboard.
     function renderHistory() {
-      const container = document.getElementById('historyList');
+      const container = document.getElementById('monthlyStats');
       const currentMonth = getMonthKey(new Date());
       const repLabels = getRepLabels();
+      const scoped = currentUser ? getScopedEntries() : state.entries;
       const percent = (actual, target) => Math.round((Number(actual) || 0) / Math.max(1, Number(target) || 0) * 100);
+      const metric = (label, actualText, targetText, pct) => `<div class="month-metric"><div class="subtle">${label}</div>
+        <div><strong>${actualText}</strong>${targetText ? ` <span class="subtle">/ ${targetText} (${pct}%)</span>` : ''}</div>
+        ${targetText ? `<div class="progress-shell"><div class="progress-bar" style="width:${Math.min(100, pct)}%"></div></div>` : ''}</div>`;
       container.innerHTML = state.history.filter(item => item.monthKey >= HISTORY_START_MONTH).slice().reverse().map(item => {
-        // The month still in progress shows live actuals rather than its (not yet finalized) stored zeros.
+        // The month still in progress (and any rep-scoped view) uses live actuals; finalized team rows use the stored figures.
         const live = !item.finalized && item.monthKey === currentMonth;
-        const revenueActual = live ? sumWonRevenueForMonth(item.monthKey) : item.revenueActual;
-        const leadActual = live ? countEntriesByMonth(item.monthKey) : item.leadActual;
+        const useStored = !live && !currentUser;
+        const revenueActual = useStored ? Number(item.revenueActual) || 0 : sumWonRevenueForMonth(item.monthKey, scoped);
+        const leadActual = useStored ? Number(item.leadActual) || 0 : countEntriesByMonth(item.monthKey, scoped);
         // Rep/status splits are always computed live: status reflects where that month's leads stand today.
-        const monthEntries = state.entries.filter(e => getMonthKey(new Date(e.createdAt)) === item.monthKey);
-        const wonCount = state.entries.filter(e => e.status === 'won' && getMonthKey(new Date(e.wonAt || e.updatedAt || e.createdAt)) === item.monthKey).length;
+        const monthEntries = scoped.filter(e => getMonthKey(new Date(e.createdAt)) === item.monthKey);
+        const wonCount = scoped.filter(e => e.status === 'won' && getMonthKey(new Date(e.wonAt || e.updatedAt || e.createdAt)) === item.monthKey).length;
         const byRep = new Map();
         monthEntries.forEach(e => { const label = repLabels.get(repKeyFor(e)) || 'Unassigned'; byRep.set(label, (byRep.get(label) || 0) + 1); });
         const repText = Array.from(byRep.entries()).sort((a, b) => b[1] - a[1]).map(([label, n]) => `${escapeHtml(label)}: ${n}`).join(' · ') || 'No leads logged';
         const statusText = Object.keys(STATUS_LABELS).map(s => [s, monthEntries.filter(e => e.status === s).length]).filter(([, n]) => n).map(([s, n]) => `${STATUS_LABELS[s]}: ${n}`).join(' · ') || '—';
-        return `<div class="history-item"><strong>${escapeHtml(formatMonthLabel(item.monthKey))}${live ? ' (in progress)' : ''}</strong>
-          <div class="small">Leads: ${Number(leadActual) || 0} / ${Number(item.leadTarget) || 0} (${percent(leadActual, item.leadTarget)}%) · Revenue: ${formatMoney(revenueActual)} / ${formatMoney(item.revenueTarget)} (${percent(revenueActual, item.revenueTarget)}%) · Deals won: ${wonCount}</div>
-          <div class="small">By rep — ${repText}</div>
-          <div class="small">Lead status now — ${statusText}</div></div>`;
-      }).join('') || '<div class="subtle">No history yet.</div>';
+        const showTargets = !currentUser;
+        return `<div class="card month-card">
+          <div class="month-head"><strong>${escapeHtml(formatMonthLabel(item.monthKey))}</strong>${live ? '<span class="pill">In progress</span>' : ''}</div>
+          ${metric('Leads logged', leadActual, showTargets ? Number(item.leadTarget) || 0 : '', percent(leadActual, item.leadTarget))}
+          ${metric('Revenue won', formatMoney(revenueActual), showTargets ? formatMoney(item.revenueTarget) : '', percent(revenueActual, item.revenueTarget))}
+          <div class="month-metric subtle">Deals won: <strong style="color:var(--navy)">${wonCount}</strong></div>
+          <div class="month-split">
+            ${currentUser ? '' : `<div class="small"><span class="subtle">By rep:</span> ${repText}</div>`}
+            <div class="small" style="margin-top:4px;"><span class="subtle">Lead status now:</span> ${statusText}</div>
+          </div>
+        </div>`;
+      }).join('') || '<div class="card subtle">No monthly stats yet.</div>';
     }
     // Every rep who has logged at least one entry, keyed the same way as repKeyFor(). Shared
     // by the rep filter dropdown and the Team & Roles admin panel.
@@ -1045,8 +1062,7 @@
     // ── SIDEBAR PAGE SWITCHING ──────────────────────────────────────────────
     const PAGE_META = {
       dashboard: { title: 'Dashboard', subtitle: 'Targets, follow-ups due, and a snapshot of the pipeline.' },
-      pipeline: { title: 'Pipeline', subtitle: 'Search, filter, and manage every prospect in the shared pipeline.' },
-      history: { title: 'History', subtitle: 'Month-over-month target vs. actual performance.' }
+      pipeline: { title: 'Pipeline', subtitle: 'Search, filter, and manage every prospect in the shared pipeline.' }
     };
     function switchPage(name) {
       document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
