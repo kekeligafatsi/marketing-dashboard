@@ -644,11 +644,20 @@
         changed = true;
       });
       const lastArchive = state.history[state.history.length - 1];
+      // History predates the per-role targets split — archive the combined (Sales Manager +
+      // Sales Officer) total so month-over-month history keeps showing one company-wide figure.
+      const revenueTarget = state.targets.sales_manager.revenue + state.targets.sales_officer.revenue;
+      const leadTarget = state.targets.sales_manager.leads + state.targets.sales_officer.leads;
+      if (lastArchive && lastArchive.monthKey === monthKey && !lastArchive.finalized) {
+        // Targets edited mid-month apply to the whole month, so keep the open month's row in step
+        // until it's finalized (a first-save-only snapshot froze September at its old target of 40).
+        if (lastArchive.revenueTarget !== revenueTarget || lastArchive.leadTarget !== leadTarget) {
+          lastArchive.revenueTarget = revenueTarget;
+          lastArchive.leadTarget = leadTarget;
+          changed = true;
+        }
+      }
       if (!lastArchive || lastArchive.monthKey !== monthKey) {
-        // History predates the per-role targets split — archive the combined (Sales Manager +
-        // Sales Officer) total so month-over-month history keeps showing one company-wide figure.
-        const revenueTarget = state.targets.sales_manager.revenue + state.targets.sales_officer.revenue;
-        const leadTarget = state.targets.sales_manager.leads + state.targets.sales_officer.leads;
         state.history.push({ monthKey, monthLabel: formatMonthLabel(monthKey), revenueTarget, revenueActual: 0, leadTarget, leadActual: 0, archivedAt: new Date().toISOString(), finalized: false });
         state.history = state.history.slice(-6);
         state.activity.unshift({ id: crypto.randomUUID(), text: `Started ${formatMonthLabel(monthKey)} target history`, createdAt: new Date().toISOString() });
